@@ -8,15 +8,37 @@
 # Hosted frontends (Vercel / Netlify / Render) cannot reach this container
 # on localhost. That needs a public API later.
 
+# Host publish is loopback-only. The API process still listens on 0.0.0.0
+# inside the container (LISTEN_HOST) so the mapped port works.
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '127.0.0.1:6379:6379'
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 1s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
   api:
     build: .
     image: ax-clipforge-backend:local
     ports:
-      - '5000:5000'
+      - '127.0.0.1:5000:5000'
     environment:
       PORT: '5000'
+      LISTEN_HOST: '0.0.0.0'
       PUBLIC_API_URL: http://localhost:5000
+      TMP_DIR: /tmp/clipforge
+      KEEP_TMP: 'false'
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    # KEEP_TMP=false still *reuses* tmp/cache until TTL/size eviction.
+    # Do not bind-mount ./tmp.
     # Optional later: mount Netscape cookies for yt-dlp.
     # volumes:
     #   - ./cookies.txt:/app/cookies.txt:ro

@@ -2,6 +2,14 @@
 
 Long-term operation of a YouTube extract API. This is **not** a bypass cookbook. YouTube, Facebook, and Safe Browsing can still flag a public extract product; we cannot guarantee otherwise.
 
+## Agent notes
+
+- Prefer **latest yt-dlp** always. Docker: GitHub `latest` at image build + `yt-dlp -U` in `docker/entrypoint.sh`. Local: `yt-dlp -U` on the host.
+- Prefer a **current FFmpeg**. Docker uses the distro package in the image; rebuild the image to refresh it. Local: upgrade the host binary (winget/brew/apt), do not leave old copies on PATH.
+- Crawler block on `/download` is implemented (`src/lib/crawler.ts`).
+- Never commit `cookies.txt`. Never bind-mount `./tmp`. Never set `KEEP_TMP=true` in Docker.
+- Pin notes in commits when you last verified a yt-dlp version; still install latest when extracting breaks.
+
 ## Current vs later
 
 - **Now:** develop on localhost. Rebuild a **local** Docker image when you change this repo.
@@ -13,13 +21,26 @@ Entrypoint `yt-dlp -U` refreshes the extractor on boot. That is a convenience, n
 
 YouTube player/signature changes break yt-dlp regularly.
 
-1. Reproduce with `yt-dlp --verbose <url>` on a machine that has the binary (or inside the local image).
-2. Update yt-dlp (upstream release) and any wrapper flags in `src/services/ytdlp.service.ts`.
-3. Commit in [https://github.com/Ax108/ax-clipforge-backend](https://github.com/Ax108/ax-clipforge-backend).
-4. `bun run docker:up` (rebuilds the local image) or publish a new image tag (future).
-5. Confirm `GET /api/v1/health` still reports `binaries.ytdlp`.
+1. Reproduce with `yt-dlp --verbose <url>` on a machine that has the **latest** binary (or inside the local image).
+2. Update yt-dlp to **latest** and any wrapper flags in `src/services/ytdlp.service.ts`.
+3. Confirm FFmpeg is a **current** build (`ffmpeg -version`).
+4. Commit in [https://github.com/Ax108/ax-clipforge-backend](https://github.com/Ax108/ax-clipforge-backend).
+5. `bun run docker:up` (rebuilds the local image) or publish a new image tag (future).
+6. Confirm `GET /api/v1/health` still reports `binaries.ytdlp` and `binaries.ffmpeg`.
 
-Pin or note the yt-dlp version you last verified. Chasing `latest` on a public datacenter IP is a common way to get throttled.
+Chasing `latest` on a **public datacenter IP** is a common way to get throttled. Localhost / Docker on a home machine is the current target.
+
+## Tmp hygiene (disk)
+
+| Control                               | When                                                                                                                          |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Reuse `tmp/cache/{cacheKey}.{format}` | Always, on cache hit. Exact requested extension only.                                                                         |
+| Keep `.part` for `--continue`         | Failed/interrupted yt-dlp                                                                                                     |
+| Evict cache by TTL/size               | `KEEP_TMP=false` (Docker)                                                                                                     |
+| No eviction                           | `KEEP_TMP=true` (`bun run dev`)                                                                                               |
+| Redis job JSON TTL                    | `JOB_TTL_MS` when `REDIS_URL` is set. Redis expiry is the source of truth; the process does not keep a second unexpired copy. |
+
+Do not bind-mount `./tmp`. Delete host `tmp/` yourself if the disk fills on `bun run dev`.
 
 ## Anti-bot env (already stubbed)
 
@@ -33,7 +54,7 @@ Use these only as yt-dlp documents them. Do not add user-agent cloaking, Faceboo
 
 ## Rate and IP
 
-- Localhost: your residential IP; still avoid burst downloads while testing later.
+- Localhost: your residential IP; still avoid burst downloads while testing.
 - Cloud VM IPs are often flagged faster than home ISPs. If you host the image later, concurrency locks belong in the app (semaphore), not “open proxy for the internet”.
 - `GET /api/v1/health` is the cheap liveness check. Do not use `/download` as a health probe.
 
@@ -44,15 +65,18 @@ If the UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com
 - Allowlisted CORS only.
 - HTTPS on UI and API.
 - No fake YouTube/Facebook branding or cloaking.
-- Later: do not start yt-dlp jobs for link-preview crawlers (`facebookexternalhit`, etc.). Not implemented yet.
+- Do not start yt-dlp jobs for link-preview crawlers (`facebookexternalhit`, etc.) — already `403` on `/download`.
 - The API must not be an anonymous download open-proxy.
 
 ## Health
 
-`GET /api/v1/health` reports whether `yt-dlp`, `ffmpeg`, and MediaBunny packages are present. Missing binaries on a Windows `bun run dev` machine are expected. The local Docker image is where those binaries are guaranteed.
+`GET /api/v1/health` reports `binaries` (`ytdlp`, `ffmpeg`, `mediabunny`), `ytdlpVersion`, `extractorFlags`, and `tmp` (`dir`, `keepTmp`, `maxAgeMs`). Missing binaries on a Windows `bun run dev` machine are expected until you install latest yt-dlp + FFmpeg. The local Docker image is where those binaries are guaranteed.
 
 ## Supply chain
 
+- Prefer `bun install --frozen-lockfile` (matches `bun.lock` and CI). Use `bun add` when changing packages.
 - Bun `minimumReleaseAge = 259200` (3 days).
 - `ignoreScripts = true`; only LavaMoat-allowlisted install scripts run (`node-av` for MediaBunny).
 - `bun run check-install-scripts` fails CI if a new top-level install script appears.
+- `package.json` `overrides` maps `ip` → `neoip@2.1.0`. `indutny/node-ip` has no patched release for [GHSA-2p57-rm9w-gvfp](https://github.com/advisories/GHSA-2p57-rm9w-gvfp); it arrives via unused optional WebRTC (`@mediabunny/server` → `node-av` → `werift`). `node-av` already documents this same override; Bun only honors it at the workspace root.
+- `bun run lint` is `oxlint .` (see `package.json`).

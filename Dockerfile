@@ -29,8 +29,11 @@ RUN bun install --frozen-lockfile \
   && chmod +x /entrypoint.sh
 
 ENV PORT=5000
+ENV LISTEN_HOST=0.0.0.0
 ENV PUBLIC_API_URL=http://localhost:5000
 ENV CORS_ORIGINS=http://localhost:5173
+ENV TMP_DIR=/tmp/clipforge
+ENV KEEP_TMP=false
 EXPOSE 5000
 
 ENTRYPOINT ["/entrypoint.sh"]

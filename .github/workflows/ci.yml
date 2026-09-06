@@ -84,10 +84,12 @@ jobs:
         run: bun run check-install-scripts
 
       - name: Run security audit
-        # Reports vulnerabilities in the job summary; does not fail the PR.
-        continue-on-error: true
         run: |
           echo "## Dependency Audit Report" >> $GITHUB_STEP_SUMMARY
+          echo 'Full report (low/moderate do not fail CI):' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           bun audit 2>&1 | tee -a $GITHUB_STEP_SUMMARY || true
           echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Failing the job only if **high** or **critical** advisories remain." >> $GITHUB_STEP_SUMMARY
+          bun audit --audit-level=high
