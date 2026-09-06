@@ -1,5 +1,6 @@
 import {readdir, stat, unlink, utimes} from 'node:fs/promises';
 import path from 'node:path';
+import {sweepAgedEntries} from './tmp.js';
 
 export function cacheDir(tmpDir: string): string {
   return path.join(tmpDir, 'cache');
@@ -45,27 +46,12 @@ export async function sweepPartFiles(
   dir: string,
   maxAgeMs: number,
 ): Promise<number> {
-  let names: string[] = [];
-  try {
-    names = await readdir(dir);
-  } catch {
-    return 0;
-  }
-  const now = Date.now();
-  let removed = 0;
-  for (const name of names) {
-    if (!name.endsWith('.part') && !name.endsWith('.ytdl')) continue;
-    const full = path.join(dir, name);
-    try {
-      const info = await stat(full);
-      if (now - info.mtimeMs <= maxAgeMs) continue;
-      await unlink(full);
-      removed += 1;
-    } catch {
-      /* skip */
-    }
-  }
-  return removed;
+  return sweepAgedEntries(
+    dir,
+    maxAgeMs,
+    name => name.endsWith('.part') || name.endsWith('.ytdl'),
+    unlink,
+  );
 }
 
 /** LRU/TTL eviction of completed cache media. Never used when KEEP_TMP is true. */

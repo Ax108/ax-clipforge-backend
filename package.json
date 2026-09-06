@@ -32,12 +32,10 @@
     "bun": ">=1.0.0"
   },
   "dependencies": {
-    "@mediabunny/server": "1.55.6",
     "cors": "2.8.6",
     "dotenv": "17.4.2",
     "execa": "10.0.1",
     "express": "5.2.1",
-    "mediabunny": "1.55.6",
     "redis": "6.2.1",
     "zod": "4.5.4"
   },
@@ -59,16 +57,8 @@
     "oxlint-tsgolint": "7.0.2001",
     "typescript": "7.0.2"
   },
-  "overrides": {
-    "ip": "npm:neoip@2.1.0"
-  },
-  "trustedDependencies": [
-    "node-av"
-  ],
   "lavamoat": {
     "allowScripts": {
-      "node-av": true,
-      "@mediabunny/server>node-av#6.1.1": true,
       "$root$": false
     }
   }

@@ -70,13 +70,12 @@ If the UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com
 
 ## Health
 
-`GET /api/v1/health` reports `binaries` (`ytdlp`, `ffmpeg`, `mediabunny`), `ytdlpVersion`, `extractorFlags`, and `tmp` (`dir`, `keepTmp`, `maxAgeMs`). Missing binaries on a Windows `bun run dev` machine are expected until you install latest yt-dlp + FFmpeg. The local Docker image is where those binaries are guaranteed.
+`GET /api/v1/health` reports `binaries` (`ytdlp`, `ffmpeg`), `ytdlpVersion`, `extractorFlags`, and `tmp` (`dir`, `keepTmp`, `maxAgeMs`). Missing binaries on a Windows `bun run dev` machine are expected until you install latest yt-dlp + FFmpeg. The local Docker image is where those binaries are guaranteed.
 
 ## Supply chain
 
 - Prefer `bun install --frozen-lockfile` (matches `bun.lock` and CI). Use `bun add` when changing packages.
 - Bun `minimumReleaseAge = 259200` (3 days).
-- `ignoreScripts = true`; only LavaMoat-allowlisted install scripts run (`node-av` for MediaBunny).
+- `ignoreScripts = true`; only LavaMoat-allowlisted install scripts run.
 - `bun run check-install-scripts` fails CI if a new top-level install script appears.
-- `package.json` `overrides` maps `ip` → `neoip@2.1.0`. `indutny/node-ip` has no patched release for [GHSA-2p57-rm9w-gvfp](https://github.com/advisories/GHSA-2p57-rm9w-gvfp); it arrives via unused optional WebRTC (`@mediabunny/server` → `node-av` → `werift`). `node-av` already documents this same override; Bun only honors it at the workspace root.
 - `bun run lint` is `oxlint .` (see `package.json`).

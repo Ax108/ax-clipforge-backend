@@ -47,7 +47,7 @@ bun run dev
 
 Prefer `--frozen-lockfile` so install matches `bun.lock` (same as CI). Use plain `bun install` or `bun add` only when you intend to change dependencies.
 
-`bunfig.toml` sets `ignoreScripts = true` and a 3-day `minimumReleaseAge`. Follow install with `bun run allow-scripts` so allow-listed native scripts run (`node-av` for MediaBunny).
+`bunfig.toml` sets `ignoreScripts = true` and a 3-day `minimumReleaseAge`. Follow install with `bun run allow-scripts` so any LavaMoat-allowlisted native install scripts run.
 
 Health: `http://localhost:5000/api/v1/health`
 

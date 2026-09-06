@@ -30,9 +30,11 @@ export async function removePrefixInDir(
 }
 
 /** Drop leftover extract files older than maxAgeMs. In-flight jobs keep recent files. */
-export async function sweepTmpDir(
+export async function sweepAgedEntries(
   dir: string,
   maxAgeMs: number,
+  consider: (name: string) => boolean,
+  remove: (full: string) => Promise<void>,
 ): Promise<number> {
   let names: string[] = [];
   try {
@@ -43,15 +45,28 @@ export async function sweepTmpDir(
   const now = Date.now();
   let removed = 0;
   for (const name of names) {
+    if (!consider(name)) continue;
     const full = path.join(dir, name);
     try {
       const info = await stat(full);
       if (now - info.mtimeMs <= maxAgeMs) continue;
-      await rm(full, {force: true, recursive: true});
+      await remove(full);
       removed += 1;
     } catch {
       /* skip locked/missing */
     }
   }
   return removed;
+}
+
+export async function sweepTmpDir(
+  dir: string,
+  maxAgeMs: number,
+): Promise<number> {
+  return sweepAgedEntries(
+    dir,
+    maxAgeMs,
+    () => true,
+    full => rm(full, {force: true, recursive: true}),
+  );
 }

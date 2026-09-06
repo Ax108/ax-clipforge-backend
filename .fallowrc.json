@@ -32,13 +32,16 @@
     "oxlint",
     "oxlint-tsgolint",
     "typescript",
-    "node-av",
-    "@mediabunny/prores",
     "execa"
   ],
   "duplicates": {
     "minOccurrences": 2,
     "ignore": [
+      "src/tests/**",
+      "**/tests/**",
+      "**/__tests__/**",
+      "**/*.test.{js,jsx,ts,tsx}",
+      "**/*.spec.{js,jsx,ts,tsx}",
       "**/dist/**",
       "**/build/**",
       "**/node_modules/**",

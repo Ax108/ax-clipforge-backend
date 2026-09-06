@@ -6,7 +6,7 @@ The UI is a separate GitHub project: [https://github.com/Ax108/ax-clipforge-fron
 
 **Status:** `/info`, `/download`, `/audio`, and `/jobs` (SSE progress + cached files + HTTP Range) are implemented. The UI `triggerDownload` uses `/jobs` for MP4 and `/audio/jobs` for audio. Load/title still uses oEmbed, not `POST /info`.
 
-No MongoDB. Clips use yt-dlp `--download-sections` + `--force-keyframes-at-cuts` (FFmpeg CLI for merge/cut). MediaBunny remains installed for later TypeScript remux, not this path.
+No MongoDB. Clips use yt-dlp `--download-sections` + `--force-keyframes-at-cuts` (FFmpeg CLI for merge/cut).
 
 ## Agent notes
 
@@ -28,18 +28,18 @@ Docker is **local-only today**. Cloud image hosting is a future option in [DEPLO
 
 ## Stack
 
-| Layer                   | Choice                                                                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| HTTP                    | Express 5 + TypeScript 7                                                                                                                      |
-| Runtime / install       | Bun for install and `bun run dev`. Express is the HTTP framework. The Docker image also includes Node.js for yt-dlp n-sig.                    |
-| Validation              | Zod (`src/config/env.ts`, `src/config/request.ts`)                                                                                            |
-| Extract                 | yt-dlp (`child_process` spawn), in-process semaphore (`DOWNLOAD_CONCURRENCY`)                                                                 |
-| Clip cut                | `--download-sections "*START-END"` + `--force-keyframes-at-cuts`                                                                              |
-| Tmp                     | `tmp/cache/{id}_{format}_{quality}_{full\|start-end}.{format}`. Only that exact file is a cache hit. Docker TTL/LRU. Redis optional for jobs. |
-| Mux / transcode (later) | `mediabunny` + `@mediabunny/server` (not used on the download path yet)                                                                       |
-| Job store               | Redis when `REDIS_URL` is set (Compose); otherwise in-memory                                                                                  |
+| Layer             | Choice                                                                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP              | Express 5 + TypeScript 7                                                                                                                      |
+| Runtime / install | Bun for install and `bun run dev`. Express is the HTTP framework. The Docker image also includes Node.js for yt-dlp n-sig.                    |
+| Validation        | Zod (`src/config/env.ts`, `src/config/request.ts`)                                                                                            |
+| Extract           | yt-dlp (`child_process` spawn), in-process semaphore (`DOWNLOAD_CONCURRENCY`)                                                                 |
+| Clip cut          | `--download-sections "*START-END"` + `--force-keyframes-at-cuts`                                                                              |
+| Mux               | FFmpeg CLI, invoked by yt-dlp (`--merge-output-format`, audio `-x`)                                                                           |
+| Tmp               | `tmp/cache/{id}_{format}_{quality}_{full\|start-end}.{format}`. Only that exact file is a cache hit. Docker TTL/LRU. Redis optional for jobs. |
+| Job store         | Redis when `REDIS_URL` is set (Compose); otherwise in-memory                                                                                  |
 
-`@mediabunny/server` is a TypeScript API over **NodeAV → FFmpeg C libraries**. It is not FFmpeg-free. The Docker image still ships FFmpeg. yt-dlp may still call an `ffmpeg` binary to merge DASH video+audio until MediaBunny muxing is implemented.
+The Docker image ships the **FFmpeg CLI**. yt-dlp calls that binary to merge DASH video+audio, cut clips, and convert audio.
 
 Docker also installs **Node.js** so yt-dlp can solve YouTube n-sig / EJS challenges, and **Python 3**.
 

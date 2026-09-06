@@ -7,12 +7,10 @@ import {
 import {isLinkPreviewCrawler} from '../lib/crawler.js';
 import {mimeForFormat} from '../lib/formats.js';
 import {sendAttachment} from '../lib/send-file.js';
-import {
-  isFfmpegAvailable,
-  isMediabunnyAvailable,
-} from '../services/media.service.js';
+import {isFfmpegAvailable} from '../services/media.service.js';
 import type {JobService} from '../services/job.service.js';
 import {YtDlpError, type YtDlpService} from '../services/ytdlp.service.js';
+import type {JobRecord} from '../store/job-store.js';
 
 export async function health(
   ytdlp: YtDlpService,
@@ -20,10 +18,9 @@ export async function health(
   _req: Request,
   res: Response,
 ): Promise<void> {
-  const [ytdlpOk, ffmpegOk, mediabunnyOk, ytdlpVersion] = await Promise.all([
+  const [ytdlpOk, ffmpegOk, ytdlpVersion] = await Promise.all([
     ytdlp.isAvailable(),
     isFfmpegAvailable(),
-    isMediabunnyAvailable(),
     ytdlp.version(),
   ]);
 
@@ -36,7 +33,6 @@ export async function health(
     binaries: {
       ytdlp: ytdlpOk,
       ffmpeg: ffmpegOk,
-      mediabunny: mediabunnyOk,
     },
     ytdlpVersion,
     extractorFlags,
@@ -52,10 +48,7 @@ export async function info(
 ): Promise<void> {
   const parsed = infoRequestSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({
-      error: 'invalid_request',
-      details: parsed.error.issues.map(issue => issue.message),
-    });
+    sendInvalidRequest(res, parsed.error.issues);
     return;
   }
 
@@ -107,18 +100,12 @@ async function streamExtract(
   res: Response,
   schema: ExtractSchema,
 ): Promise<void> {
-  if (isLinkPreviewCrawler(req.get('user-agent'))) {
-    res.status(403).json({error: 'crawler_forbidden'});
-    return;
-  }
+  if (rejectCrawler(req, res)) return;
 
   const source = req.method === 'GET' ? req.query : req.body;
   const parsed = schema.safeParse(source);
   if (!parsed.success) {
-    res.status(400).json({
-      error: 'invalid_request',
-      details: parsed.error.issues.map(issue => issue.message),
-    });
+    sendInvalidRequest(res, parsed.error.issues);
     return;
   }
 
@@ -150,16 +137,10 @@ async function startJob(
   res: Response,
   schema: ExtractSchema,
 ): Promise<void> {
-  if (isLinkPreviewCrawler(req.get('user-agent'))) {
-    res.status(403).json({error: 'crawler_forbidden'});
-    return;
-  }
+  if (rejectCrawler(req, res)) return;
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({
-      error: 'invalid_request',
-      details: parsed.error.issues.map(issue => issue.message),
-    });
+    sendInvalidRequest(res, parsed.error.issues);
     return;
   }
   try {
@@ -175,12 +156,8 @@ export async function getJob(
   req: Request,
   res: Response,
 ): Promise<void> {
-  const id = String(req.params.id ?? '');
-  const job = await jobs.store.get(id);
-  if (!job) {
-    res.status(404).json({error: 'job_not_found'});
-    return;
-  }
+  const job = await requireJob(jobs, req, res);
+  if (!job) return;
   res.status(200).json(jobs.toPublic(job));
 }
 
@@ -189,12 +166,8 @@ export async function jobEvents(
   req: Request,
   res: Response,
 ): Promise<void> {
-  const id = String(req.params.id ?? '');
-  const existing = await jobs.store.get(id);
-  if (!existing) {
-    res.status(404).json({error: 'job_not_found'});
-    return;
-  }
+  const existing = await requireJob(jobs, req, res);
+  if (!existing) return;
 
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -222,7 +195,7 @@ export async function jobEvents(
     closed = true;
     unsub();
   });
-  unsub = await jobs.store.subscribe(id, next => {
+  unsub = await jobs.store.subscribe(existing.id, next => {
     write(next);
     finishIfTerminal(next);
   });
@@ -231,7 +204,7 @@ export async function jobEvents(
     return;
   }
 
-  const latest = await jobs.store.get(id);
+  const latest = await jobs.store.get(existing.id);
   if (!latest) {
     closed = true;
     unsub();
@@ -247,16 +220,9 @@ export async function jobFile(
   req: Request,
   res: Response,
 ): Promise<void> {
-  if (isLinkPreviewCrawler(req.get('user-agent'))) {
-    res.status(403).json({error: 'crawler_forbidden'});
-    return;
-  }
-  const id = String(req.params.id ?? '');
-  const job = await jobs.store.get(id);
-  if (!job) {
-    res.status(404).json({error: 'job_not_found'});
-    return;
-  }
+  if (rejectCrawler(req, res)) return;
+  const job = await requireJob(jobs, req, res);
+  if (!job) return;
   if (job.stage !== 'complete' || !job.filePath) {
     res.status(409).json({error: 'job_not_ready', stage: job.stage});
     return;
@@ -268,6 +234,33 @@ export async function jobFile(
     mimeForFormat(job.request.format),
     job.filename || `${job.cacheKey}.${job.request.format}`,
   );
+}
+
+function rejectCrawler(req: Request, res: Response): boolean {
+  if (!isLinkPreviewCrawler(req.get('user-agent'))) return false;
+  res.status(403).json({error: 'crawler_forbidden'});
+  return true;
+}
+
+function sendInvalidRequest(res: Response, issues: {message: string}[]): void {
+  res.status(400).json({
+    error: 'invalid_request',
+    details: issues.map(issue => issue.message),
+  });
+}
+
+async function requireJob(
+  jobs: JobService,
+  req: Request,
+  res: Response,
+): Promise<JobRecord | null> {
+  const id = String(req.params.id ?? '');
+  const job = await jobs.store.get(id);
+  if (!job) {
+    res.status(404).json({error: 'job_not_found'});
+    return null;
+  }
+  return job;
 }
 
 function sendYtDlpError(res: Response, err: unknown): void {

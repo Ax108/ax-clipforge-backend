@@ -64,7 +64,7 @@ describe('API', () => {
     const body = (await res.json()) as {
       ok: boolean;
       service: string;
-      binaries: {ytdlp: boolean; ffmpeg: boolean; mediabunny: boolean};
+      binaries: {ytdlp: boolean; ffmpeg: boolean};
       extractorFlags: string[];
       tmp: {dir: string; keepTmp: boolean; maxAgeMs: number};
       jobs: {store: string};
@@ -73,7 +73,6 @@ describe('API', () => {
     expect(body.service).toBe('ax-clipforge-backend');
     expect(typeof body.binaries.ytdlp).toBe('boolean');
     expect(typeof body.binaries.ffmpeg).toBe('boolean');
-    expect(typeof body.binaries.mediabunny).toBe('boolean');
     expect(body.extractorFlags).toContain('--no-warnings');
     expect(body.tmp.keepTmp).toBe(true);
     expect(body.tmp.dir.length).toBeGreaterThan(0);
