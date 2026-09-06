@@ -7,6 +7,7 @@ import express, {
 } from 'express';
 import type {AppEnv} from './config/env.js';
 import {
+  audioRouter,
   downloadRouter,
   infoRouter,
   jobRouter,
@@ -61,6 +62,7 @@ export function createApp(
   app.use('/api/v1/info', infoRouter(ytdlp));
   app.use('/api/v1/jobs', jobRouter(jobs));
   app.use('/api/v1/download', downloadRouter(jobs));
+  app.use('/api/v1/audio', audioRouter(jobs));
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (isJsonParseError(err)) {

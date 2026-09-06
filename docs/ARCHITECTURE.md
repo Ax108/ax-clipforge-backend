@@ -4,7 +4,7 @@ ClipForge backend is a standalone Express API: [https://github.com/Ax108/ax-clip
 
 The UI is a separate GitHub project: [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend). They are not a monorepo.
 
-**Status:** `/info`, `/download`, and `/jobs` (SSE progress + cached files + HTTP Range) are implemented. The UI `triggerDownload` is wired to `/jobs`. Load/title still uses oEmbed, not `POST /info`.
+**Status:** `/info`, `/download`, `/audio`, and `/jobs` (SSE progress + cached files + HTTP Range) are implemented. The UI `triggerDownload` uses `/jobs` for MP4 and `/audio/jobs` for audio. Load/title still uses oEmbed, not `POST /info`.
 
 No MongoDB. Clips use yt-dlp `--download-sections` + `--force-keyframes-at-cuts` (FFmpeg CLI for merge/cut). MediaBunny remains installed for later TypeScript remux, not this path.
 
@@ -19,7 +19,7 @@ No MongoDB. Clips use yt-dlp `--download-sections` + `--force-keyframes-at-cuts`
 
 ## Current run mode
 
-| Surface  | Now                                                         | Later (not this scaffold)       |
+| Surface  | Now                                                         | Later (not this local release)  |
 | -------- | ----------------------------------------------------------- | ------------------------------- |
 | Frontend | Local Vite `:5173` (jobs SSE for Download; oEmbed for Load) | Maybe Vercel / Netlify / Render |
 | Backend  | Local `bun run dev` and/or **local Docker** + Redis sidecar | Maybe a hosted image            |
@@ -45,14 +45,14 @@ Docker also installs **Node.js** so yt-dlp can solve YouTube n-sig / EJS challen
 
 ## Frontend wiring
 
-The in-app Download button calls `POST /api/v1/jobs`, listens to SSE `GET /api/v1/jobs/:id/events` (stages `queued` / `downloading` / `merging` from yt-dlp), then the browser downloads `GET /api/v1/jobs/:id/file`.
+The in-app Download button calls `POST /api/v1/jobs` for MP4 or `POST /api/v1/audio/jobs` for `mp3` / `m4a` / `flac`, listens to SSE `GET /api/v1/jobs/:id/events` (stages `queued` / `downloading` / `merging` from yt-dlp), then the browser downloads `GET /api/v1/jobs/:id/file`.
 
 1. Same **cache key** (video id + format + quality + `full` or `start-end`) returns the cached file. No second YouTube pull, no second ffmpeg merge.
 2. `Content-Disposition: attachment` + `Accept-Ranges: bytes`. Interrupted file transfers resume with `Range` (browser download shelf or `curl -C -`).
 3. Interrupted **extract**: yt-dlp `--continue` keeps `.part` files; reconnect SSE or `GET /jobs/:id`. Closing the EventSource does not abort the job.
 4. Docker does **not** delete the cache after the stream. `KEEP_TMP=false` only evicts old/large cache.
 
-Folder pickers (`showSaveFilePicker`) remain an optional Chromium UI later. Direct GET `/download?...` still works for curl (waits until the job finishes, then streams; uses cache).
+Folder pickers (`showSaveFilePicker`) remain an optional Chromium UI later. Direct GET `/download?...` still works for curl (waits until the job finishes, then streams; uses cache). GET `/audio?...` is the same wait+stream path restricted to `mp3` / `m4a` / `flac` (default `mp3`). Same cache key as `/download?format=mp3`.
 
 ## Tmp and disk
 
@@ -61,7 +61,7 @@ Folder pickers (`showSaveFilePicker`) remain an optional Chromium UI later. Dire
 | `bun run docker:up` | `false`          | Container `/tmp/clipforge/cache` | **Kept and reused.** Evicted by `CACHE_TTL_MS` / `CACHE_MAX_BYTES`. |
 | `bun run dev`       | `true` (default) | `{cwd}/tmp/cache`                | **Kept.** No TTL eviction.                                          |
 
-Incomplete `.part` files stay so yt-dlp `--continue` can resume. Stale parts are swept after `TMP_MAX_AGE_MS` when `KEEP_TMP=false`. Do not volume-mount `./tmp`. One concurrent extract (`DOWNLOAD_CONCURRENCY=1`).
+Incomplete `.part` files stay so yt-dlp `--continue` can resume. Stale parts are swept after `TMP_MAX_AGE_MS` when `KEEP_TMP=false`. Do not volume-mount `./tmp`. The default is one concurrent extract (`DOWNLOAD_CONCURRENCY=1`).
 
 ## Request flow
 
@@ -69,29 +69,35 @@ Incomplete `.part` files stay so yt-dlp `--continue` can resume. Stale parts are
 Browser or curl
   → GET /api/v1/health   (binaries, tmp, jobs.store memory|redis)
   → POST /api/v1/info    → yt-dlp --dump-single-json
-  → POST /api/v1/jobs    → cache hit? stream later : queue yt-dlp
+  → POST /api/v1/jobs    → MP4: cache hit? stream later : queue yt-dlp
+  → POST /api/v1/audio/jobs → audio: same queue/cache as format=mp3|m4a|flac
        → GET /api/v1/jobs/:id/events  (SSE: downloading % / merging)
        → GET /api/v1/jobs/:id/file    (attachment, Accept-Ranges)
-  → GET /api/v1/download?...   (curl: wait + stream; same cache)
+  → GET /api/v1/download?...   (curl video; wait + stream; same cache)
+  → GET /api/v1/audio?...      (curl audio-only; same cache as format=mp3|m4a|flac)
 ```
 
 ## HTTP contracts
 
 Prefix: `/api/v1`. CORS is an **allowlist** (`CORS_ORIGINS`, comma-separated). Production must not use `*`.
 
-| Method    | Path                      | Behavior                                            |
-| --------- | ------------------------- | --------------------------------------------------- |
-| GET       | `/api/v1/health`          | binaries, `tmp`, `jobs.store` (`memory` \| `redis`) |
-| POST      | `/api/v1/info`            | `{ url }` → metadata JSON, or 400/503               |
-| POST      | `/api/v1/jobs`            | start extract; 200 cache hit / 202 queued           |
-| GET       | `/api/v1/jobs/:id`        | snapshot                                            |
-| GET       | `/api/v1/jobs/:id/events` | SSE `progress` (reconnect-safe)                     |
-| GET       | `/api/v1/jobs/:id/file`   | attachment; `Range` → 206; 409 if not ready         |
-| GET, POST | `/api/v1/download`        | wait + stream (curl); same cache; 403 crawlers      |
+| Method    | Path                      | Behavior                                              |
+| --------- | ------------------------- | ----------------------------------------------------- |
+| GET       | `/api/v1/health`          | binaries, `tmp`, `jobs.store` (`memory` \| `redis`)   |
+| POST      | `/api/v1/info`            | `{ url }` → metadata JSON, or 400/502/503             |
+| POST      | `/api/v1/jobs`            | start extract; 200 cache hit / 202 queued             |
+| GET       | `/api/v1/jobs/:id`        | snapshot                                              |
+| GET       | `/api/v1/jobs/:id/events` | SSE `progress` (reconnect-safe)                       |
+| GET       | `/api/v1/jobs/:id/file`   | attachment; `Range` → 206; 409 if not ready           |
+| GET, POST | `/api/v1/download`        | wait + stream (curl); same cache; 403 crawlers        |
+| GET, POST | `/api/v1/audio`           | audio-only wait + stream; default `mp3`; 403 crawlers |
+| POST      | `/api/v1/audio/jobs`      | start audio extract; 200 cache hit / 202 queued       |
 
 Download body/query: `url` (required), `format` (`mp4` \| `mp3` \| `m4a` \| `flac`, default `mp4`), `quality` (mp4 height like `1080p`; audio `best` / `128kbps` / `256kbps` / `320kbps`). Audio kbps labels pass yt-dlp `--audio-quality 128K|256K|320K`. `best` is VBR quality `0` and is a different cache key from `320kbps`. Optional `start`/`end` (seconds or `HH:MM:SS`): both required to clip; omit both for full. Invalid ranges, unknown bitrates, and `720p!`-style quality return 400. Clip seconds are floored so the cache key matches yt-dlp.
 
-These match [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend) `buildDownloadUrl`.
+`/audio` uses the same fields except `format` is `mp3` \| `m4a` \| `flac` (default `mp3`). `format=mp4` is **400**. SSE and file download stay on `/api/v1/jobs/:id/events` and `/api/v1/jobs/:id/file`. A `/audio` extract and `/download?format=mp3` with the same quality and range share one cache file.
+
+The shared request fields match [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend) `buildDownloadUrl` (MP4 → `/download`, audio → `/audio`).
 
 ## Layout
 

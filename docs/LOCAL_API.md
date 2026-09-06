@@ -20,7 +20,8 @@ Confirm: `GET /api/v1/health` → `tmp.keepTmp`, `jobs.store`.
 ## Agent notes
 
 - Clip vs full is query/body fields, not a `mode` flag. Omit `start` and `end` for a full extract. Send **both** `start` and `end` (seconds or `HH:MM:SS`) for a trimmed clip. `end` must be greater than `start` or the API returns **400**. `start=0&end=0` is treated as full (no `--download-sections`). One bound without the other is **400**, not a full download.
-- `format`: `mp4` \| `mp3` \| `m4a` \| `flac` (default `mp4`). `quality`: mp4 `1080p` / `720p` / `480p` (default `1080p`); mp3 `128kbps` / `256kbps` / `320kbps` (default `320kbps`, passed to yt-dlp as `128K`/`256K`/`320K`); m4a/flac `best` (VBR `0`) or those bitrates. `best` and `320kbps` are different cache keys. Other bitrates and `720p!` are **400**.
+- `format`: `mp4` \| `mp3` \| `m4a` \| `flac` (default `mp4` on `/download` and `/jobs`). `quality`: mp4 `1080p` / `720p` / `480p` (default `1080p`); mp3 `128kbps` / `256kbps` / `320kbps` (default `320kbps`, passed to yt-dlp as `128K`/`256K`/`320K`); m4a/flac `best` (VBR `0`) or those bitrates. `best` and `320kbps` are different cache keys. Other bitrates and `720p!` are **400**.
+- Dedicated audio: `GET`/`POST /api/v1/audio` (and `POST /api/v1/audio/jobs`). Same clip/quality rules. `format` default `mp3`; only `mp3` \| `m4a` \| `flac`. `format=mp4` is **400**. Same cache key as `/download?format=mp3` (or m4a/flac) with the same quality and range.
 - `curl -o file.mp4` always saves **your** copy wherever you point `-o`. That is separate from server `TMP_DIR`.
 
 ## Prerequisites
@@ -95,7 +96,7 @@ curl -L --fail -o full.mp4 \
 
 Browser: paste the same GET URL in the address bar. The browser download UI saves the attachment.
 
-On `bun run dev` with default `KEEP_TMP=true`, also look in `./tmp` for the server-side file.
+On `bun run dev` with default `KEEP_TMP=true`, also look in `./tmp/cache` for the server-side file.
 
 ## Download — trimmed clip
 
@@ -115,20 +116,53 @@ curl -L --fail -o clip.mp4 \
   -d "{\"url\":\"https://www.youtube.com/watch?v=VIDEO_ID\",\"format\":\"mp4\",\"quality\":\"720p\",\"start\":\"01:00\",\"end\":\"01:30\"}"
 ```
 
-Audio-only example (full track):
+Audio-only via `/download` (still valid; same cache as `/audio`):
 
 ```bash
 curl -L --fail -o track.mp3 \
   "http://localhost:5000/api/v1/download?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DVIDEO_ID&format=mp3&quality=320kbps"
 ```
 
+## Audio-only — dedicated endpoint
+
+`GET` or `POST /api/v1/audio`. Required: `url`. Optional: `format` (`mp3` \| `m4a` \| `flac`, default `mp3`), `quality` (mp3 default `320kbps`; m4a/flac default `best`). Clip with **both** `start` and `end`, same as `/download`. Do not send `format=mp4`.
+
+Progress jobs: `POST /api/v1/audio/jobs`, then the existing `GET /api/v1/jobs/:id/events` and `GET /api/v1/jobs/:id/file`.
+
+```bash
+# Full MP3 (default format + 320kbps)
+curl -L --fail -o track.mp3 \
+  "http://localhost:5000/api/v1/audio?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DVIDEO_ID"
+```
+
+```bash
+# FLAC via POST JSON
+curl -L --fail -o track.flac \
+  -X POST http://localhost:5000/api/v1/audio \
+  -H "content-type: application/json" \
+  -d "{\"url\":\"https://www.youtube.com/watch?v=VIDEO_ID\",\"format\":\"flac\"}"
+```
+
+```bash
+# Clip 0s-30s, 256kbps MP3
+curl -L --fail -o clip.mp3 \
+  "http://localhost:5000/api/v1/audio?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DVIDEO_ID&format=mp3&quality=256kbps&start=0&end=30"
+```
+
+```bash
+# Start a job (SSE + file stay on /jobs/:id)
+curl -sS -X POST http://localhost:5000/api/v1/audio/jobs \
+  -H "content-type: application/json" \
+  -d "{\"url\":\"https://www.youtube.com/watch?v=VIDEO_ID\",\"format\":\"m4a\"}"
+```
+
 ## Expected errors (from current handlers)
 
-| Status | When                                                                                                                                   |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 400    | Missing/invalid `url`, clip range, quality, malformed JSON, or not a YouTube host (`invalid_url` / `invalid_request` / `invalid_json`) |
-| 403    | Link-preview User-Agent on `/download` (`crawler_forbidden`)                                                                           |
-| 503    | yt-dlp binary missing (`unavailable`)                                                                                                  |
-| 502    | yt-dlp extract/download failed                                                                                                         |
+| Status | When                                                                                                                                                             |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400    | Missing/invalid `url`, clip range, quality, `format=mp4` on `/audio`, malformed JSON, or not a YouTube host (`invalid_url` / `invalid_request` / `invalid_json`) |
+| 403    | Link-preview User-Agent on `/download`, `/audio`, `POST /jobs`, `POST /audio/jobs`, or `GET /jobs/:id/file` (`crawler_forbidden`)                                |
+| 503    | A cache miss needs yt-dlp and the binary is missing (`unavailable`)                                                                                              |
+| 502    | yt-dlp extraction/download fails, including operations that require an unavailable FFmpeg                                                                        |
 
 Downloads take as long as yt-dlp + mux. Default timeout `DOWNLOAD_TIMEOUT_MS=600000` (10 minutes). `DOWNLOAD_CONCURRENCY` default `1`.

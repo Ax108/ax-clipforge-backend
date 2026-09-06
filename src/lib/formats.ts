@@ -1,6 +1,8 @@
 export const MEDIA_FORMATS = ['mp4', 'mp3', 'm4a', 'flac'] as const;
 export type MediaFormat = (typeof MEDIA_FORMATS)[number];
 
+export const AUDIO_FORMATS = ['mp3', 'm4a', 'flac'] as const;
+
 export const AUDIO_QUALITIES = [
   'best',
   '128kbps',

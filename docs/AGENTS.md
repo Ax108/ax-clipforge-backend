@@ -8,13 +8,13 @@ Code is the source of truth (`src/config/env.ts`, `src/services/job.service.ts`,
 
 ## Read this first
 
-| Doc                                  | Use when                                           |
-| ------------------------------------ | -------------------------------------------------- |
-| [README.md](../README.md)            | Setup, scripts, install                            |
-| [LOCAL_API.md](./LOCAL_API.md)       | curl/GET download without the frontend; `KEEP_TMP` |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | HTTP contracts, tmp lifecycle, frontend wiring     |
-| [DEPLOYMENT.md](./DEPLOYMENT.md)     | Docker Desktop vs `bun run dev` binaries           |
-| [MAINTENANCE.md](./MAINTENANCE.md)   | yt-dlp/ffmpeg updates, cookies, CORS               |
+| Doc                                  | Use when                                                     |
+| ------------------------------------ | ------------------------------------------------------------ |
+| [README.md](../README.md)            | Setup, scripts, install                                      |
+| [LOCAL_API.md](./LOCAL_API.md)       | curl/GET download and audio without the frontend; `KEEP_TMP` |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | HTTP contracts, tmp lifecycle, frontend wiring               |
+| [DEPLOYMENT.md](./DEPLOYMENT.md)     | Docker Desktop vs `bun run dev` binaries                     |
+| [MAINTENANCE.md](./MAINTENANCE.md)   | yt-dlp/ffmpeg updates, cookies, CORS                         |
 
 ## Do
 
@@ -30,7 +30,7 @@ Code is the source of truth (`src/config/env.ts`, `src/services/job.service.ts`,
 
 - Commit `.env`, `cookies.txt`, or `tmp/`.
 - Treat the API as a public open-proxy.
-- Change the frontend from this repo. Download is already wired in the frontend `src/services/api.ts` (`POST /jobs` + SSE). Load/title still uses oEmbed.
+- Change the frontend from this repo. Video download is wired to `POST /jobs` + SSE; audio uses `POST /audio/jobs` + the same SSE/file routes. Load/title still uses oEmbed.
 - Bind-mount host `./tmp` into Compose. That writes media into the git checkout and can fill the host disk.
 - Set `KEEP_TMP=true` in the Docker image or Compose.
 
@@ -47,8 +47,8 @@ bun verify
 bun run docker:up
 ```
 
-Local URL tests (full + clip): [LOCAL_API.md](./LOCAL_API.md).
+Local URL tests (full + clip + audio): [LOCAL_API.md](./LOCAL_API.md).
 
-## Ready for frontend wiring?
+## Frontend wiring status
 
-**Wired.** UI `triggerDownload` uses `POST /api/v1/jobs` + `GET /api/v1/jobs/:id/events` (yt-dlp progress) then the browser saves `GET /api/v1/jobs/:id/file` (`Accept-Ranges: bytes`). `GET /api/v1/download` remains for curl. Load/title still uses oEmbed, not `POST /info`.
+**Wired.** UI `triggerDownload` uses `POST /api/v1/jobs` for MP4 and `POST /api/v1/audio/jobs` for `mp3` / `m4a` / `flac`, then `GET /api/v1/jobs/:id/events` (yt-dlp progress) and the browser saves `GET /api/v1/jobs/:id/file` (`Accept-Ranges: bytes`). Copyable curl URLs: `GET /api/v1/download` (video) and `GET /api/v1/audio` (audio; same cache as `/download?format=mp3`). Load/title still uses oEmbed, not `POST /info`.

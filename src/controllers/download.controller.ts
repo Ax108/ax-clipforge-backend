@@ -1,5 +1,9 @@
 import type {Request, Response} from 'express';
-import {downloadRequestSchema, infoRequestSchema} from '../config/request.js';
+import {
+  audioRequestSchema,
+  downloadRequestSchema,
+  infoRequestSchema,
+} from '../config/request.js';
 import {isLinkPreviewCrawler} from '../lib/crawler.js';
 import {mimeForFormat} from '../lib/formats.js';
 import {sendAttachment} from '../lib/send-file.js';
@@ -63,10 +67,45 @@ export async function info(
   }
 }
 
+type ExtractSchema = typeof downloadRequestSchema | typeof audioRequestSchema;
+
 export async function download(
   jobs: JobService,
   req: Request,
   res: Response,
+): Promise<void> {
+  await streamExtract(jobs, req, res, downloadRequestSchema);
+}
+
+export async function audio(
+  jobs: JobService,
+  req: Request,
+  res: Response,
+): Promise<void> {
+  await streamExtract(jobs, req, res, audioRequestSchema);
+}
+
+export async function createJob(
+  jobs: JobService,
+  req: Request,
+  res: Response,
+): Promise<void> {
+  await startJob(jobs, req, res, downloadRequestSchema);
+}
+
+export async function createAudioJob(
+  jobs: JobService,
+  req: Request,
+  res: Response,
+): Promise<void> {
+  await startJob(jobs, req, res, audioRequestSchema);
+}
+
+async function streamExtract(
+  jobs: JobService,
+  req: Request,
+  res: Response,
+  schema: ExtractSchema,
 ): Promise<void> {
   if (isLinkPreviewCrawler(req.get('user-agent'))) {
     res.status(403).json({error: 'crawler_forbidden'});
@@ -74,7 +113,7 @@ export async function download(
   }
 
   const source = req.method === 'GET' ? req.query : req.body;
-  const parsed = downloadRequestSchema.safeParse(source);
+  const parsed = schema.safeParse(source);
   if (!parsed.success) {
     res.status(400).json({
       error: 'invalid_request',
@@ -105,16 +144,17 @@ export async function download(
   }
 }
 
-export async function createJob(
+async function startJob(
   jobs: JobService,
   req: Request,
   res: Response,
+  schema: ExtractSchema,
 ): Promise<void> {
   if (isLinkPreviewCrawler(req.get('user-agent'))) {
     res.status(403).json({error: 'crawler_forbidden'});
     return;
   }
-  const parsed = downloadRequestSchema.safeParse(req.body);
+  const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({
       error: 'invalid_request',

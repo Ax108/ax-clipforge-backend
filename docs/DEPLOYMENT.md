@@ -5,10 +5,10 @@
 - End users of the **image** need Docker only (Docker Desktop or Docker Engine).
 - `bun run dev` needs Bun **and** latest yt-dlp + latest FFmpeg on PATH.
 - Never bind-mount `./tmp`. Image: `TMP_DIR=/tmp/clipforge`, `KEEP_TMP=false` (evict, do not wipe after each stream), Redis sidecar.
-- This scaffold is **local**. A hosted UI cannot call `localhost:5000`.
+- This release is **local**. A hosted UI cannot call `localhost:5000`.
 - After changing this repo, rebuild the image (`bun run docker:up`). Do not mutate a running container as a release.
 
-## Now (this scaffold)
+## Now (local release)
 
 Two local ways to run the API. **Neither is a public host.**
 
@@ -36,10 +36,10 @@ Update loop today: edit this git repo → `bun run docker:up` → run again.
 | --------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | [Bun](https://bun.sh) ≥ 1.0 | Install + `bun run dev`                               | Current Bun 1.x                                                                                                                  |
 | Node.js ≥ 24                | `engines` field / yt-dlp n-sig if invoked on the host | Current Node 24+                                                                                                                 |
-| **yt-dlp** on PATH          | `/info` and `/download`                               | **Always latest** (`yt-dlp -U`, or reinstall from [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases/latest))           |
+| **yt-dlp** on PATH          | `/info`, `/download`, `/audio`, `/jobs`               | **Always latest** (`yt-dlp -U`, or reinstall from [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases/latest))           |
 | **FFmpeg** on PATH          | Merge/cut (`--force-keyframes-at-cuts`, DASH mux)     | **Latest stable** (Windows: a current Gyan/winget FFmpeg; macOS: current `brew` ffmpeg; Linux: current distro or a static build) |
 
-Without yt-dlp/FFmpeg, `bun run dev` still starts; `/info` and `/download` return **503**. Prefer Docker if you do not want to maintain those binaries.
+Without yt-dlp, `bun run dev` still starts; `/info`, `/download`, `/audio`, and `/jobs` return **503** when they need to start an extract. Missing FFmpeg is reported by health and causes yt-dlp operations that require merge, trim, or audio conversion to fail instead of producing a valid file. Cached files can still be served without starting either binary. Prefer Docker if you do not want to maintain those binaries.
 
 ```bash
 cp .env.example .env   # optional; defaults work
@@ -54,7 +54,7 @@ Health: `http://127.0.0.1:5000/api/v1/health`
 
 Default `TMP_DIR` is `{cwd}/tmp` (gitignored). Cache files live in `{TMP_DIR}/cache`. Default `KEEP_TMP=true`. Same clip parameters reuse the file. Optional `REDIS_URL=redis://127.0.0.1:6379` if Compose Redis is up.
 
-The UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend) on `:5173` uses `POST /api/v1/jobs` + SSE for progress. Curl still uses `GET /api/v1/download?...`. Recipes: [LOCAL_API.md](./LOCAL_API.md).
+The UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend) on `:5173` uses `POST /api/v1/jobs` (MP4) or `POST /api/v1/audio/jobs` (audio) + SSE for progress. Curl uses `GET /api/v1/download?...` (video) or `GET /api/v1/audio?...` (audio-only). Recipes: [LOCAL_API.md](./LOCAL_API.md).
 
 ## Env mapping
 

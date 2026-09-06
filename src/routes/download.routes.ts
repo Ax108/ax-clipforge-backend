@@ -1,5 +1,7 @@
 import {Router} from 'express';
 import {
+  audio,
+  createAudioJob,
   createJob,
   download,
   getJob,
@@ -17,6 +19,20 @@ export function downloadRouter(jobs: JobService): Router {
   });
   router.post('/', (req, res, next) => {
     void download(jobs, req, res).catch(next);
+  });
+  return router;
+}
+
+export function audioRouter(jobs: JobService): Router {
+  const router = Router();
+  router.post('/jobs', (req, res, next) => {
+    void createAudioJob(jobs, req, res).catch(next);
+  });
+  router.get('/', (req, res, next) => {
+    void audio(jobs, req, res).catch(next);
+  });
+  router.post('/', (req, res, next) => {
+    void audio(jobs, req, res).catch(next);
   });
   return router;
 }

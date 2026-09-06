@@ -6,7 +6,7 @@ Long-term operation of a YouTube extract API. This is **not** a bypass cookbook.
 
 - Prefer **latest yt-dlp** always. Docker: GitHub `latest` at image build + `yt-dlp -U` in `docker/entrypoint.sh`. Local: `yt-dlp -U` on the host.
 - Prefer a **current FFmpeg**. Docker uses the distro package in the image; rebuild the image to refresh it. Local: upgrade the host binary (winget/brew/apt), do not leave old copies on PATH.
-- Crawler block on `/download` is implemented (`src/lib/crawler.ts`).
+- Crawler block on `/download`, `/audio`, `POST /jobs`, `POST /audio/jobs`, and `GET /jobs/:id/file` is implemented (`src/lib/crawler.ts`).
 - Never commit `cookies.txt`. Never bind-mount `./tmp`. Never set `KEEP_TMP=true` in Docker.
 - Pin notes in commits when you last verified a yt-dlp version; still install latest when extracting breaks.
 
@@ -56,7 +56,7 @@ Use these only as yt-dlp documents them. Do not add user-agent cloaking, Faceboo
 
 - Localhost: your residential IP; still avoid burst downloads while testing.
 - Cloud VM IPs are often flagged faster than home ISPs. If you host the image later, concurrency locks belong in the app (semaphore), not “open proxy for the internet”.
-- `GET /api/v1/health` is the cheap liveness check. Do not use `/download` as a health probe.
+- `GET /api/v1/health` is the cheap liveness check. Do not use `/download` or `/audio` as a health probe.
 
 ## Public site reputation
 
@@ -65,7 +65,7 @@ If the UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com
 - Allowlisted CORS only.
 - HTTPS on UI and API.
 - No fake YouTube/Facebook branding or cloaking.
-- Do not start yt-dlp jobs for link-preview crawlers (`facebookexternalhit`, etc.) — already `403` on `/download`.
+- Do not start yt-dlp jobs for link-preview crawlers (`facebookexternalhit`, etc.) — already `403` on `/download`, `/audio`, `POST /jobs`, `POST /audio/jobs`, and `GET /jobs/:id/file`.
 - The API must not be an anonymous download open-proxy.
 
 ## Health

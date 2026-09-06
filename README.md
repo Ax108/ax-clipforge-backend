@@ -1,6 +1,6 @@
 # ClipForge backend
 
-Express + TypeScript API for YouTube extract (yt-dlp). **Health, info, jobs (live progress), cache, Range resume, and download are implemented.** The UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend) uses `POST /api/v1/jobs` + SSE for in-app progress; `GET /api/v1/download` is the copyable/curl path.
+Express + TypeScript API for YouTube extract (yt-dlp). **Health, info, jobs (live progress), cache, Range resume, download, and audio-only extract are implemented.** The UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend) uses `POST /api/v1/jobs` (video) or `POST /api/v1/audio/jobs` (audio) + SSE for in-app progress. `GET /api/v1/download` and `GET /api/v1/audio` are the copyable/curl paths.
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-5-000000?style=for-the-badge&logo=express&logoColor=white)
@@ -10,7 +10,7 @@ Express + TypeScript API for YouTube extract (yt-dlp). **Health, info, jobs (liv
 
 Read [docs/AGENTS.md](./docs/AGENTS.md) first, then:
 
-- [Local API testing](./docs/LOCAL_API.md) — curl full + clipped downloads; `KEEP_TMP`
+- [Local API testing](./docs/LOCAL_API.md) — curl full + clipped downloads and audio; `KEEP_TMP`
 - [Architecture](./docs/ARCHITECTURE.md) — HTTP contracts, tmp lifecycle, how the browser saves files
 - [Deployment](./docs/DEPLOYMENT.md) — Docker Desktop vs local Bun + yt-dlp + FFmpeg
 - [Maintenance](./docs/MAINTENANCE.md) — keep yt-dlp/FFmpeg current; cookies/proxy
@@ -33,7 +33,7 @@ Read [docs/AGENTS.md](./docs/AGENTS.md) first, then:
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Recommended:** `bun run docker:up` | [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine (Linux). **Not** Bun, Node, yt-dlp, FFmpeg, or Python on the host. |
 | Local process: `bun run dev`         | [Bun](https://bun.sh) ≥ 1.0, Node.js ≥ 24, **yt-dlp (latest)**, **FFmpeg (latest stable)**.                                                                           |
-| Browser only                         | Nothing. The file is saved by the browser after `/download` streams `Content-Disposition: attachment`.                                                                |
+| Browser only                         | Nothing. The file is saved by the browser after `/download` or `/audio` streams `Content-Disposition: attachment`.                                                    |
 
 Always use the **latest** yt-dlp release (`yt-dlp -U` or the GitHub `latest` binary). Use a **current** FFmpeg build (not a years-old distro pin if you can avoid it). YouTube extractors break often; stale binaries fail first.
 
