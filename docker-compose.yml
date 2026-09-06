@@ -1,0 +1,25 @@
+# Local Docker image for ClipForge API.
+# Current target: run on the development machine only.
+# Future: publish a tagged image and host it — see docs/DEPLOYMENT.md. Do not
+# treat a public registry or Fly/Railway/Render as the present setup.
+#
+#   bun run docker:up
+#
+# Hosted frontends (Vercel / Netlify / Render) cannot reach this container
+# on localhost. That needs a public API later.
+
+services:
+  api:
+    build: .
+    image: ax-clipforge-backend:local
+    ports:
+      - '5000:5000'
+    environment:
+      PORT: '5000'
+      PUBLIC_API_URL: http://localhost:5000
+    # Optional later: mount Netscape cookies for yt-dlp.
+    # volumes:
+    #   - ./cookies.txt:/app/cookies.txt:ro
+    # Future cloud stub (do not enable now):
+    # image: ghcr.io/ax108/ax-clipforge-backend:TAG
+    restart: unless-stopped

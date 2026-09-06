@@ -1,0 +1,57 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": ["src/server.ts"],
+  "ignorePatterns": [
+    "**/*.test.{js,jsx,ts,tsx}",
+    "**/*.spec.{js,jsx,ts,tsx}",
+    "src/tests/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/dist/**",
+    "**/build/**",
+    "coverage/**",
+    "jest.config.cjs",
+    "jest.setup.cjs",
+    "babel.jest.cjs",
+    "scripts/**"
+  ],
+  "ignoreDependencies": [
+    "@babel/core",
+    "@babel/preset-env",
+    "@babel/preset-typescript",
+    "@lavamoat/allow-scripts",
+    "@types/cors",
+    "@types/express",
+    "@types/jest",
+    "@types/node",
+    "babel-jest",
+    "fallow",
+    "husky",
+    "jest",
+    "oxfmt",
+    "oxlint",
+    "oxlint-tsgolint",
+    "typescript",
+    "node-av",
+    "@mediabunny/prores",
+    "execa"
+  ],
+  "duplicates": {
+    "minOccurrences": 2,
+    "ignore": [
+      "**/dist/**",
+      "**/build/**",
+      "**/node_modules/**",
+      "coverage/**"
+    ],
+    "mode": "mild"
+  },
+  "health": {
+    "ignore": ["src/tests/**", "**/tests/**", "**/*.test.ts", "scripts/**"]
+  },
+  "rules": {
+    "circular-dependencies": "error",
+    "unused-types": "off",
+    "unused-exports": "off"
+  }
+}

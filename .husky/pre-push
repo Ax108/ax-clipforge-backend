@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -e
+# Block push unless all diagnostics pass.
+bun verify

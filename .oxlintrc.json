@@ -1,0 +1,118 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "typescript", "unicorn", "oxc", "jest"],
+  "categories": {
+    "correctness": "error"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "env": {
+    "builtin": true,
+    "es2026": true,
+    "node": true
+  },
+  "ignorePatterns": [
+    "dist/",
+    "build/",
+    "node_modules/",
+    ".oxlintrc.json",
+    ".oxfmtrc.json",
+    "coverage/",
+    "jest.config.cjs",
+    "jest.setup.cjs",
+    "babel.jest.cjs"
+  ],
+  "rules": {
+    "eqeqeq": ["warn", "smart"],
+    "no-console": "off",
+    "no-nested-ternary": "off",
+    "no-unused-expressions": "warn",
+    "no-unused-vars": [
+      "error",
+      {
+        "vars": "all",
+        "args": "after-used",
+        "argsIgnorePattern": "^_",
+        "ignoreRestSiblings": true,
+        "caughtErrors": "all",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "no-var": "error",
+    "no-warning-comments": "warn",
+    "prefer-const": "warn",
+
+    "unicorn/no-nested-ternary": "off",
+
+    "import/first": "warn",
+    "import/namespace": "error",
+    "import/no-duplicates": "warn",
+    "import/no-named-as-default": "warn",
+    "import/no-named-as-default-member": "warn",
+
+    "typescript/array-type": ["warn", {"default": "array"}],
+    "typescript/consistent-type-assertions": [
+      "warn",
+      {
+        "assertionStyle": "as",
+        "objectLiteralTypeAssertions": "allow"
+      }
+    ],
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-deprecated": "warn",
+    "typescript/no-empty-object-type": "warn",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-extra-non-null-assertion": "warn",
+    "typescript/no-floating-promises": "warn",
+    "typescript/no-require-imports": "error",
+    "typescript/no-wrapper-object-types": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["*.config.{ts,js,mjs,cjs}"],
+      "env": {
+        "node": true
+      },
+      "rules": {
+        "typescript/no-floating-promises": "warn"
+      }
+    },
+    {
+      "files": [
+        "src/tests/**/*.{ts,tsx}",
+        "**/__tests__/**/*.{ts,tsx}",
+        "**/*.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}"
+      ],
+      "env": {
+        "jest": true,
+        "node": true
+      },
+      "rules": {
+        "jest/expect-expect": "warn",
+        "jest/no-alias-methods": "error",
+        "jest/no-commented-out-tests": "warn",
+        "jest/no-conditional-expect": "error",
+        "jest/no-deprecated-functions": "error",
+        "jest/no-disabled-tests": "warn",
+        "jest/no-done-callback": "error",
+        "jest/no-export": "error",
+        "jest/no-focused-tests": "error",
+        "jest/no-identical-title": "error",
+        "jest/no-interpolation-in-snapshots": "error",
+        "jest/no-jasmine-globals": "error",
+        "jest/no-mocks-import": "error",
+        "jest/no-standalone-expect": "error",
+        "jest/no-test-prefixes": "error",
+        "jest/valid-describe-callback": "error",
+        "jest/valid-expect": "error",
+        "jest/valid-expect-in-promise": "error",
+        "jest/valid-title": "error",
+        "typescript/no-explicit-any": "off",
+        "typescript/no-non-null-assertion": "off",
+        "typescript/no-floating-promises": "warn"
+      }
+    }
+  ]
+}
