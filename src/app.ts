@@ -13,6 +13,8 @@ import {
   jobRouter,
 } from './routes/download.routes.js';
 import {healthRouter} from './routes/health.routes.js';
+import {createRateLimiters} from './middleware/rateLimit.js';
+import {ROBOTS_TXT_BODY, blockSearchIndexing} from './middleware/robots.js';
 import {JobService} from './services/job.service.js';
 import {YtDlpService} from './services/ytdlp.service.js';
 import type {JobStore} from './store/job-store.js';
@@ -34,8 +36,13 @@ export function createApp(
   const app = express();
   const ytdlp = new YtDlpService(env);
   const jobs = new JobService(env, ytdlp, store);
+  const limits = createRateLimiters(env);
 
   app.disable('x-powered-by');
+  if (env.TRUST_PROXY) {
+    app.set('trust proxy', 1);
+  }
+  app.use(blockSearchIndexing);
   app.use(express.json({limit: '1mb'}));
   app.use(express.urlencoded({extended: false}));
   app.use(
@@ -47,9 +54,16 @@ export function createApp(
         'Accept-Ranges',
         'Content-Range',
         'Content-Length',
+        'RateLimit-Limit',
+        'RateLimit-Remaining',
+        'RateLimit-Reset',
       ],
     }),
   );
+
+  app.get('/robots.txt', (_req, res) => {
+    res.type('text/plain').send(ROBOTS_TXT_BODY);
+  });
 
   app.get('/', (_req, res) => {
     res.json({
@@ -58,11 +72,12 @@ export function createApp(
     });
   });
 
+  // /health and /robots.txt: no rate limit (probes / crawlers reading robots).
   app.use('/api/v1/health', healthRouter(ytdlp, jobs));
-  app.use('/api/v1/info', infoRouter(ytdlp));
-  app.use('/api/v1/jobs', jobRouter(jobs));
-  app.use('/api/v1/download', downloadRouter(jobs));
-  app.use('/api/v1/audio', audioRouter(jobs));
+  app.use('/api/v1/info', infoRouter(ytdlp, limits.extract));
+  app.use('/api/v1/jobs', jobRouter(jobs, limits));
+  app.use('/api/v1/download', downloadRouter(jobs, limits.extract));
+  app.use('/api/v1/audio', audioRouter(jobs, limits.extract));
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (isJsonParseError(err)) {

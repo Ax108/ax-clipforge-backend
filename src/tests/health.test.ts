@@ -61,6 +61,7 @@ describe('API', () => {
     const base = await listen();
     const res = await fetch(`${base}/api/v1/health`);
     expect(res.status).toBe(200);
+    expect(res.headers.get('x-robots-tag')).toContain('noindex');
     const body = (await res.json()) as {
       ok: boolean;
       service: string;
@@ -78,6 +79,17 @@ describe('API', () => {
     expect(body.tmp.dir.length).toBeGreaterThan(0);
     expect(body.tmp.maxAgeMs).toBeGreaterThan(0);
     expect(body.jobs.store).toBe('memory');
+  });
+
+  it('GET /robots.txt disallows all crawlers', async () => {
+    const base = await listen();
+    const res = await fetch(`${base}/robots.txt`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toMatch(/text\/plain/);
+    expect(res.headers.get('x-robots-tag')).toContain('noindex');
+    const body = await res.text();
+    expect(body).toContain('User-agent: *');
+    expect(body).toContain('Disallow: /');
   });
 
   it('GET /api/v1/health reports KEEP_TMP=false when Docker-style env is set', async () => {

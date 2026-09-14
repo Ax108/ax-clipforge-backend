@@ -7,6 +7,8 @@ Long-term operation of a YouTube extract API. This is **not** a bypass cookbook.
 - Prefer **latest yt-dlp** always. Docker: GitHub `latest` at image build + `yt-dlp -U` in `docker/entrypoint.sh`. Local: `yt-dlp -U` on the host.
 - Prefer a **current FFmpeg**. Docker uses the distro package in the image; rebuild the image to refresh it. Local: upgrade the host binary (winget/brew/apt), do not leave old copies on PATH.
 - Crawler block on `/download`, `/audio`, `POST /jobs`, `POST /audio/jobs`, and `GET /jobs/:id/file` is implemented (`src/lib/crawler.ts`).
+- `GET /robots.txt` is `Disallow: /`; every response also sets `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet` (search engines only — does not stop yt-dlp abuse).
+- IP rate limits (`express-rate-limit`): hard on extract starters (`/jobs`, `/audio/jobs`, `/download`, `/audio`, `/info`), medium on `/jobs/:id/file`, light on job snapshot/SSE. `/health` and `/robots.txt` are exempt. See `RATE_LIMIT_*` in `.env.example`. Set `TRUST_PROXY=true` behind a reverse proxy.
 - Never commit `cookies.txt`. Never bind-mount `./tmp`. Never set `KEEP_TMP=true` in Docker.
 - Pin notes in commits when you last verified a yt-dlp version; still install latest when extracting breaks.
 
@@ -66,11 +68,13 @@ If the UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com
 - HTTPS on UI and API.
 - No fake YouTube/Facebook branding or cloaking.
 - Do not start yt-dlp jobs for link-preview crawlers (`facebookexternalhit`, etc.) — already `403` on `/download`, `/audio`, `POST /jobs`, `POST /audio/jobs`, and `GET /jobs/:id/file`.
+- Serve `GET /robots.txt` (`Disallow: /`) and `X-Robots-Tag` on API responses so search engines should not index the API host.
+- Keep IP rate limits on (defaults in `.env.example`). Raise `RATE_LIMIT_*` only if legitimate clients hit 429. Use `TRUST_PROXY=true` only when a reverse proxy sets `X-Forwarded-For`.
 - The API must not be an anonymous download open-proxy.
 
 ## Health
 
-`GET /api/v1/health` reports `binaries` (`ytdlp`, `ffmpeg`), `ytdlpVersion`, `extractorFlags`, and `tmp` (`dir`, `keepTmp`, `maxAgeMs`). Missing binaries on a Windows `bun run dev` machine are expected until you install latest yt-dlp + FFmpeg. The local Docker image is where those binaries are guaranteed.
+`GET /api/v1/health` reports `binaries` (`ytdlp`, `ffmpeg`), `ytdlpVersion`, `extractorFlags`, and `tmp` (`dir`, `keepTmp`, `maxAgeMs`). On `bun run dev`, `"ytdlp": false` usually means the binary is installed but **not visible to that process** (stale shell PATH, or need `YTDLP_BIN=/absolute/path/to/yt-dlp`). Fix PATH or `YTDLP_BIN`, restart `bun run dev`, re-check health. The local Docker image ships yt-dlp + FFmpeg so host PATH is irrelevant there.
 
 ## Supply chain
 

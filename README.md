@@ -1,6 +1,8 @@
 # ClipForge backend
 
-Express + TypeScript API for YouTube extract (yt-dlp). **Health, info, jobs (live progress), cache, Range resume, download, and audio-only extract are implemented.** The UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend) uses `POST /api/v1/jobs` (video) or `POST /api/v1/audio/jobs` (audio) + SSE for in-app progress. `GET /api/v1/download` and `GET /api/v1/audio` are the copyable/curl paths.
+Express + TypeScript API for YouTube extract (yt-dlp). **Health, info, jobs (live progress), cache, Range resume, download, and audio-only extract are implemented.**
+
+The UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend) uses **YouTube oEmbed** for Load/preview (not `POST /info`). In-app Download uses `POST /api/v1/jobs` (video) or `POST /api/v1/audio/jobs` (audio) + SSE, then the browser saves `GET /api/v1/jobs/:id/file`. `GET /api/v1/download` and `GET /api/v1/audio` are the copyable/curl paths. `/info` remains available for curl/tools. Extract routes are IP rate-limited (`RATE_LIMIT_*` in `.env.example`); `/health` and `/robots.txt` are not. `GET /robots.txt` is `Disallow: /` with `X-Robots-Tag` on all responses.
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-5-000000?style=for-the-badge&logo=express&logoColor=white)
@@ -17,7 +19,7 @@ Read [docs/AGENTS.md](./docs/AGENTS.md) first, then:
 
 ## Now vs later
 
-- **Now:** this API on `127.0.0.1:5000` (`LISTEN_HOST` defaults to loopback). Extract works via `bun run docker:up` (Docker Desktop + Redis sidecar, host ports on loopback) or `bun run dev` (Bun + **latest yt-dlp** + **latest FFmpeg** on PATH; Redis optional).
+- **Now:** this API on `127.0.0.1:5000` (`LISTEN_HOST` defaults to loopback). Extract works via `bun run docker:up` (yt-dlp + FFmpeg **inside** the image) or `bun run dev` (Bun + **latest yt-dlp** + **latest FFmpeg** on PATH or via `YTDLP_BIN`; Redis optional).
 - **Not now:** Vercel/Netlify/Render or a public image.
 
 ## Tmp: Docker vs local
@@ -49,11 +51,15 @@ Prefer `--frozen-lockfile` so install matches `bun.lock` (same as CI). Use plain
 
 `bunfig.toml` sets `ignoreScripts = true` and a 3-day `minimumReleaseAge`. Follow install with `bun run allow-scripts` so any LavaMoat-allowlisted native install scripts run.
 
+**Local `bun run dev`:** the process must find **yt-dlp** and **FFmpeg**. If `GET /api/v1/health` shows `"ytdlp": false`, extracts return **503** even though the API is up. Put both binaries on PATH for that shell, or set `YTDLP_BIN` in `.env` to the full path of `yt-dlp` / `yt-dlp.exe` (common on Windows after WinGet when the terminal was opened before PATH updated). Details: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+
+**Docker:** `bun run docker:up` — yt-dlp and FFmpeg are inside the image; no host PATH / `YTDLP_BIN` needed.
+
 Health: `http://localhost:5000/api/v1/health`
 
 Optional env: copy [`.env.example`](./.env.example). Defaults assume local Vite `http://localhost:5173`.
 
-Docker (no host yt-dlp/FFmpeg):
+Docker (no host yt-dlp/FFmpeg). Jest and `src/tests` are **not** copied into the image (see `.dockerignore`); the container only runs the API:
 
 ```bash
 bun run docker:up

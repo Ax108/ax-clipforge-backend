@@ -27,10 +27,13 @@ Confirm: `GET /api/v1/health` → `tmp.keepTmp`, `jobs.store`.
 ## Prerequisites
 
 1. API listening on `http://localhost:5000`.
-2. Latest **yt-dlp** + **FFmpeg** on PATH (`bun run dev`), or `bun run docker:up` (binaries inside the image).
-3. `GET http://localhost:5000/api/v1/health` shows `binaries.ytdlp` and `binaries.ffmpeg` true.
+2. For **`bun run dev`:** latest **yt-dlp** + **FFmpeg** must be resolvable by that process — on `PATH`, or set `YTDLP_BIN` to an absolute path (Windows WinGet installs often need a new shell or an explicit path). For **Docker** (`bun run docker:up`): binaries are in the image; host PATH does not matter.
+3. `GET http://localhost:5000/api/v1/health` shows `binaries.ytdlp` and `binaries.ffmpeg` **true**. If `ytdlp` is false, extract routes return **503** until PATH/`YTDLP_BIN` is fixed.
 
 ```bash
+# bun run dev — confirm the same shell can see the tools:
+yt-dlp --version
+ffmpeg -version
 bun run dev
 # other terminal:
 curl -sS http://localhost:5000/api/v1/health
@@ -53,6 +56,18 @@ Docker: files stay **inside** the container cache until eviction. Use `curl -o c
 ```bash
 curl -sS http://localhost:5000/api/v1/health
 ```
+
+## robots.txt
+
+Search engines should not index this API host:
+
+```bash
+curl -sS http://localhost:5000/robots.txt
+# User-agent: *
+# Disallow: /
+```
+
+Responses also send `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet`.
 
 ## Info (metadata JSON)
 
@@ -162,7 +177,8 @@ curl -sS -X POST http://localhost:5000/api/v1/audio/jobs \
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 400    | Missing/invalid `url`, clip range, quality, `format=mp4` on `/audio`, malformed JSON, or not a YouTube host (`invalid_url` / `invalid_request` / `invalid_json`) |
 | 403    | Link-preview User-Agent on `/download`, `/audio`, `POST /jobs`, `POST /audio/jobs`, or `GET /jobs/:id/file` (`crawler_forbidden`)                                |
+| 429    | IP exceeded rate limit (`rate_limited`). Defaults: 10 extract starts / 15 min; see `RATE_LIMIT_*` in `.env.example`. `/health` and `/robots.txt` are exempt.     |
 | 503    | A cache miss needs yt-dlp and the binary is missing (`unavailable`)                                                                                              |
 | 502    | yt-dlp extraction/download fails, including operations that require an unavailable FFmpeg                                                                        |
 
-Downloads take as long as yt-dlp + mux. Default timeout `DOWNLOAD_TIMEOUT_MS=600000` (10 minutes). `DOWNLOAD_CONCURRENCY` default `1`.
+Downloads take as long as yt-dlp + mux. Default timeout `DOWNLOAD_TIMEOUT_MS=600000` (10 minutes). `DOWNLOAD_CONCURRENCY` default `1`. Rapid repeated curl of `/download` or `/jobs` from the same IP can hit **429** before yt-dlp runs.

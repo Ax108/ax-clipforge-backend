@@ -35,6 +35,17 @@ const envSchema = z.object({
   JOB_TTL_MS: z.coerce.number().int().positive().default(86_400_000),
   CACHE_TTL_MS: z.coerce.number().int().positive().default(86_400_000),
   CACHE_MAX_BYTES: z.coerce.number().int().positive().default(2_147_483_648),
+  /** Trust X-Forwarded-For when behind a reverse proxy (cloud). Off locally. */
+  TRUST_PROXY: z.boolean().default(false),
+  /** Master switch for IP rate limits. Off in Jest (NODE_ENV=test) unless forced. */
+  RATE_LIMIT_ENABLED: z.boolean().default(true),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900_000),
+  /** Starts yt-dlp: /jobs, /audio/jobs, /download, /audio, /info */
+  RATE_LIMIT_EXTRACT_MAX: z.coerce.number().int().positive().default(10),
+  /** GET /jobs/:id/file (Range retries count) */
+  RATE_LIMIT_FILE_MAX: z.coerce.number().int().positive().default(60),
+  /** GET /jobs/:id and SSE /events */
+  RATE_LIMIT_JOB_READ_MAX: z.coerce.number().int().positive().default(240),
 });
 
 export type AppEnv = z.infer<typeof envSchema> & {
@@ -49,6 +60,8 @@ export function parseCorsOrigins(raw: string): string[] {
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
+  const nodeEnv = source.NODE_ENV ?? process.env.NODE_ENV ?? 'development';
+  const rateLimitDefault = nodeEnv !== 'test';
   const parsed = envSchema.parse({
     PORT: source.PORT,
     LISTEN_HOST: source.LISTEN_HOST,
@@ -57,7 +70,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     PROXY_URL: source.PROXY_URL,
     COOKIE_FILE_PATH: source.COOKIE_FILE_PATH,
     PO_TOKEN: source.PO_TOKEN,
-    NODE_ENV: source.NODE_ENV,
+    NODE_ENV: nodeEnv,
     YTDLP_BIN: source.YTDLP_BIN,
     TMP_DIR: source.TMP_DIR,
     DOWNLOAD_CONCURRENCY: source.DOWNLOAD_CONCURRENCY,
@@ -68,6 +81,15 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     JOB_TTL_MS: source.JOB_TTL_MS,
     CACHE_TTL_MS: source.CACHE_TTL_MS,
     CACHE_MAX_BYTES: source.CACHE_MAX_BYTES,
+    TRUST_PROXY: parseEnvBool(source.TRUST_PROXY, false),
+    RATE_LIMIT_ENABLED: parseEnvBool(
+      source.RATE_LIMIT_ENABLED,
+      rateLimitDefault,
+    ),
+    RATE_LIMIT_WINDOW_MS: source.RATE_LIMIT_WINDOW_MS,
+    RATE_LIMIT_EXTRACT_MAX: source.RATE_LIMIT_EXTRACT_MAX,
+    RATE_LIMIT_FILE_MAX: source.RATE_LIMIT_FILE_MAX,
+    RATE_LIMIT_JOB_READ_MAX: source.RATE_LIMIT_JOB_READ_MAX,
   });
   return {
     ...parsed,

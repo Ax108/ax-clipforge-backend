@@ -3,8 +3,10 @@
 ## Agent notes
 
 - End users of the **image** need Docker only (Docker Desktop or Docker Engine).
-- `bun run dev` needs Bun **and** latest yt-dlp + latest FFmpeg on PATH.
+- `bun run dev` needs Bun **and** latest yt-dlp + latest FFmpeg visible to that process (on PATH, or `YTDLP_BIN` = full path). WinGet installs often require a new shell or an explicit path — see [Localhost process](#2-localhost-process-daily-typescript-development).
+- Docker image includes yt-dlp + FFmpeg; host PATH is irrelevant for `bun run docker:up`.
 - Never bind-mount `./tmp`. Image: `TMP_DIR=/tmp/clipforge`, `KEEP_TMP=false` (evict, do not wipe after each stream), Redis sidecar.
+- IP rate limits and `/robots.txt` apply in Docker the same as `bun run dev` (in-memory per process). Set `TRUST_PROXY=true` only if a reverse proxy forwards client IPs.
 - This release is **local**. A hosted UI cannot call `localhost:5000`.
 - After changing this repo, rebuild the image (`bun run docker:up`). Do not mutate a running container as a release.
 
@@ -39,12 +41,24 @@ Update loop today: edit this git repo → `bun run docker:up` → run again.
 | **yt-dlp** on PATH          | `/info`, `/download`, `/audio`, `/jobs`               | **Always latest** (`yt-dlp -U`, or reinstall from [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases/latest))           |
 | **FFmpeg** on PATH          | Merge/cut (`--force-keyframes-at-cuts`, DASH mux)     | **Latest stable** (Windows: a current Gyan/winget FFmpeg; macOS: current `brew` ffmpeg; Linux: current distro or a static build) |
 
-Without yt-dlp, `bun run dev` still starts; `/info`, `/download`, `/audio`, and `/jobs` return **503** when they need to start an extract. Missing FFmpeg is reported by health and causes yt-dlp operations that require merge, trim, or audio conversion to fail instead of producing a valid file. Cached files can still be served without starting either binary. Prefer Docker if you do not want to maintain those binaries.
+Without yt-dlp, `bun run dev` still starts; `/info`, `/download`, `/audio`, and `/jobs` return **503** (`yt-dlp is not installed` / `unavailable`) when they need to start an extract. Missing FFmpeg is reported by health and causes yt-dlp operations that require merge, trim, or audio conversion to fail instead of producing a valid file. Cached files can still be served without starting either binary. Prefer Docker if you do not want to maintain those binaries.
+
+#### yt-dlp / FFmpeg must be visible to the `bun` process
+
+Installing yt-dlp (or FFmpeg) is not enough if the shell that runs `bun run dev` cannot resolve the binary.
+
+- Default: the API spawns `yt-dlp` from **PATH** (`YTDLP_BIN=yt-dlp` in `.env.example`).
+- On **Windows** especially, WinGet/installer packages often land in a User PATH entry that **Git Bash, Cursor terminals, or an already-open shell never picked up**. Health then shows `"ytdlp": false` and extracts return **503** even though `yt-dlp.exe` exists on disk.
+- **Fix (pick one):** open a **new** terminal after installing so PATH refreshes; prepend the folder that contains `yt-dlp` / `yt-dlp.exe` to `PATH` for that session; or set `YTDLP_BIN` in `.env` to the **full absolute path** of the binary. Same idea for FFmpeg if `binaries.ffmpeg` is false.
+- Confirm before coding: `yt-dlp --version`, `ffmpeg -version`, then `curl -s http://localhost:5000/api/v1/health` → both `binaries.ytdlp` and `binaries.ffmpeg` should be `true`.
+
+**Docker does not have this problem.** `bun run docker:up` installs yt-dlp and FFmpeg **inside the image**; the host PATH and `YTDLP_BIN` do not matter.
 
 ```bash
 cp .env.example .env   # optional; defaults work
 bun install --frozen-lockfile
 bun run allow-scripts
+# Ensure yt-dlp + ffmpeg are on PATH (or set YTDLP_BIN), then:
 bun run dev
 ```
 
@@ -58,15 +72,22 @@ The UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax
 
 ## Env mapping
 
-| Backend                            | Role                                                                                     |
-| ---------------------------------- | ---------------------------------------------------------------------------------------- |
-| `LISTEN_HOST`                      | Bind address. Local default `127.0.0.1`. Docker `0.0.0.0` with host publish on loopback. |
-| `PUBLIC_API_URL`                   | Public origin of this API                                                                |
-| `CORS_ORIGINS`                     | Exact browser origins allowed (comma-separated)                                          |
-| `TMP_DIR`                          | Server cache root. Local `{cwd}/tmp`. Docker `/tmp/clipforge`. Files in `cache/`.        |
-| `KEEP_TMP`                         | Local `true` (no eviction). Docker `false` (TTL/size eviction).                          |
-| `REDIS_URL`                        | Compose `redis://redis:6379`. Empty = in-memory jobs.                                    |
-| `CACHE_TTL_MS` / `CACHE_MAX_BYTES` | Docker cache eviction                                                                    |
+| Backend                            | Role                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `LISTEN_HOST`                      | Bind address. Local default `127.0.0.1`. Docker `0.0.0.0` with host publish on loopback.           |
+| `PUBLIC_API_URL`                   | Public origin of this API                                                                          |
+| `CORS_ORIGINS`                     | Exact browser origins allowed (comma-separated)                                                    |
+| `YTDLP_BIN`                        | yt-dlp executable name or **absolute path**. Default `yt-dlp` (must be on PATH for `bun run dev`). |
+| `TRUST_PROXY`                      | `true` when a reverse proxy sets `X-Forwarded-For` (rate-limit IP). Local default `false`.         |
+| `RATE_LIMIT_ENABLED`               | IP rate limits on. Auto-off when `NODE_ENV=test`.                                                  |
+| `RATE_LIMIT_WINDOW_MS`             | Window length (default 15 minutes).                                                                |
+| `RATE_LIMIT_EXTRACT_MAX`           | Max extract starts per IP per window (`/jobs`, `/audio*`, `/download`, `/info`).                   |
+| `RATE_LIMIT_FILE_MAX`              | Max `GET /jobs/:id/file` per IP per window.                                                        |
+| `RATE_LIMIT_JOB_READ_MAX`          | Max job snapshot + SSE opens per IP per window.                                                    |
+| `TMP_DIR`                          | Server cache root. Local `{cwd}/tmp`. Docker `/tmp/clipforge`. Files in `cache/`.                  |
+| `KEEP_TMP`                         | Local `true` (no eviction). Docker `false` (TTL/size eviction).                                    |
+| `REDIS_URL`                        | Compose `redis://redis:6379`. Empty = in-memory jobs.                                              |
+| `CACHE_TTL_MS` / `CACHE_MAX_BYTES` | Docker cache eviction                                                                              |
 
 `.env.example` includes placeholder Vercel / Netlify / Render origins. They are **stubs**. Do not treat them as live hosts.
 

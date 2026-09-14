@@ -13,6 +13,7 @@ No MongoDB. Clips use yt-dlp `--download-sections` + `--force-keyframes-at-cuts`
 - Docker writes to `/tmp/clipforge/cache` inside the container (`KEEP_TMP=false` = TTL/LRU eviction only). Completed files are **reused** for the same cache key. Compose publishes `127.0.0.1:5000` and `127.0.0.1:6379` only.
 - Local `bun run dev`: `KEEP_TMP` defaults **true**. Cache stays in gitignored `./tmp/cache`. `LISTEN_HOST` defaults to `127.0.0.1`.
 - Progress is real yt-dlp lines via SSE (`POST /api/v1/jobs`, `GET /api/v1/jobs/:id/events`). Dropping SSE does **not** kill yt-dlp. File GET supports `Range`.
+- IP rate limits (per process, in-memory): extract starters hard; `/jobs/:id/file` medium; snapshot/SSE light. `/health` and `/robots.txt` exempt. `TRUST_PROXY` only when behind a reverse proxy.
 - Redis (Compose) stores job snapshots with `JOB_TTL_MS`. Expired Redis keys are gone (no unbounded in-process copy). Without `REDIS_URL`, jobs are in-memory.
 - The browser saves the file from the HTTP stream. The API never writes into the user’s Downloads folder or the frontend repo.
 - Folder pickers (`showSaveFilePicker`) are a **frontend** choice, not an API header.
@@ -81,17 +82,18 @@ Browser or curl
 
 Prefix: `/api/v1`. CORS is an **allowlist** (`CORS_ORIGINS`, comma-separated). Production must not use `*`.
 
-| Method    | Path                      | Behavior                                              |
-| --------- | ------------------------- | ----------------------------------------------------- |
-| GET       | `/api/v1/health`          | binaries, `tmp`, `jobs.store` (`memory` \| `redis`)   |
-| POST      | `/api/v1/info`            | `{ url }` → metadata JSON, or 400/502/503             |
-| POST      | `/api/v1/jobs`            | start extract; 200 cache hit / 202 queued             |
-| GET       | `/api/v1/jobs/:id`        | snapshot                                              |
-| GET       | `/api/v1/jobs/:id/events` | SSE `progress` (reconnect-safe)                       |
-| GET       | `/api/v1/jobs/:id/file`   | attachment; `Range` → 206; 409 if not ready           |
-| GET, POST | `/api/v1/download`        | wait + stream (curl); same cache; 403 crawlers        |
-| GET, POST | `/api/v1/audio`           | audio-only wait + stream; default `mp3`; 403 crawlers |
-| POST      | `/api/v1/audio/jobs`      | start audio extract; 200 cache hit / 202 queued       |
+| Method    | Path                      | Behavior                                                              |
+| --------- | ------------------------- | --------------------------------------------------------------------- |
+| GET       | `/robots.txt`             | `Disallow: /` (plus `X-Robots-Tag` on all responses)                  |
+| GET       | `/api/v1/health`          | binaries, `tmp`, `jobs.store` (`memory` \| `redis`); no rate limit    |
+| POST      | `/api/v1/info`            | `{ url }` → metadata JSON, or 400/429/502/503                         |
+| POST      | `/api/v1/jobs`            | start extract; 200 cache hit / 202 queued; 429 if rate-limited        |
+| GET       | `/api/v1/jobs/:id`        | snapshot                                                              |
+| GET       | `/api/v1/jobs/:id/events` | SSE `progress` (reconnect-safe)                                       |
+| GET       | `/api/v1/jobs/:id/file`   | attachment; `Range` → 206; 409 if not ready                           |
+| GET, POST | `/api/v1/download`        | wait + stream (curl); same cache; 403 crawlers; 429 rate limit        |
+| GET, POST | `/api/v1/audio`           | audio-only wait + stream; default `mp3`; 403 crawlers; 429 rate limit |
+| POST      | `/api/v1/audio/jobs`      | start audio extract; 200 cache hit / 202 queued; 429 rate limit       |
 
 Download body/query: `url` (required), `format` (`mp4` \| `mp3` \| `m4a` \| `flac`, default `mp4`), `quality` (mp4 height like `1080p`; audio `best` / `128kbps` / `256kbps` / `320kbps`). Audio kbps labels pass yt-dlp `--audio-quality 128K|256K|320K`. `best` is VBR quality `0` and is a different cache key from `320kbps`. Optional `start`/`end` (seconds or `HH:MM:SS`): both required to clip; omit both for full. Invalid ranges, unknown bitrates, and `720p!`-style quality return 400. Clip seconds are floored so the cache key matches yt-dlp.
 
@@ -103,12 +105,14 @@ The shared request fields match [https://github.com/Ax108/ax-clipforge-frontend]
 
 ```text
 src/
-├── server.ts                 # listen, cache dir, optional Redis, eviction if KEEP_TMP=false
-├── app.ts
-├── services/job.service.ts   # cache hit, queue, SSE publish
-├── services/ytdlp.service.ts # --continue, --progress, cache output path
-├── store/                    # memory + Redis job records
-└── lib/cache-key.ts          # stable full vs clip key
+├── server.ts                   # listen, cache dir, optional Redis, eviction if KEEP_TMP=false
+├── app.ts                      # CORS, robots, rate limits, routers
+├── middleware/robots.ts        # /robots.txt body + X-Robots-Tag
+├── middleware/rateLimit.ts     # extract / file / jobRead IP limiters
+├── services/job.service.ts     # cache hit, queue, SSE publish
+├── services/ytdlp.service.ts   # --continue, --progress, cache output path
+├── store/                      # memory + Redis job records
+└── lib/cache-key.ts            # stable full vs clip key
 ```
 
 `YtDlpService.extraArgs()` reads `PROXY_URL`, `COOKIE_FILE_PATH`, and `PO_TOKEN`.
