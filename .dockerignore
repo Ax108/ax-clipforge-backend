@@ -11,3 +11,14 @@ docs
 .vscode
 .husky
 .github
+
+# Never ship tests or the Jest harness in the image
+src/tests
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+jest.config.cjs
+jest.setup.cjs
+babel.jest.cjs

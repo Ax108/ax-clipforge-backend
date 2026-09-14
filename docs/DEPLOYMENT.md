@@ -16,7 +16,7 @@ Two local ways to run the API. **Neither is a public host.**
 
 **Requires:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows or macOS, or Docker Engine + Compose on Linux. Start Docker before `docker compose`.
 
-**Does not require on the host:** Bun, Node, Python, yt-dlp, or FFmpeg. Those are inside the image. The image pulls **yt-dlp `latest`** at build time and runs `yt-dlp -U` on container boot.
+**Does not require on the host:** Bun, Node, Python, yt-dlp, or FFmpeg. Those are inside the image. The image pulls **yt-dlp `latest`** at build time and runs `yt-dlp -U` on container boot. Jest / `src/tests` are **not** copied into the image (see `.dockerignore`); the entrypoint only runs `bun src/server.ts`.
 
 ```bash
 bun run docker:up
@@ -98,6 +98,6 @@ Keep **`KEEP_TMP=false`** and **no host volume** for tmp in cloud: use the conta
 
 ## Out of scope here
 
-- Wiring Load/title to `POST /info` (the UI still uses oEmbed)
+- Keep UI Load on oEmbed; do not route paste/preview through `POST /info` (Download-only uses yt-dlp)
 - Creating a Vercel/Netlify/Render project
 - Pushing images to a registry

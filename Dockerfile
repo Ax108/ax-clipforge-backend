@@ -1,5 +1,6 @@
 # Local-only image. Python + Node (yt-dlp n-sig) + FFmpeg CLI + yt-dlp + Bun API.
 # Operators who run this image do not need Bun or yt-dlp on the host.
+# Test sources and Jest config are excluded via .dockerignore (not copied, not run).
 FROM oven/bun:1
 
 USER root

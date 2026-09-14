@@ -30,7 +30,7 @@ Code is the source of truth (`src/config/env.ts`, `src/services/job.service.ts`,
 
 - Commit `.env`, `cookies.txt`, or `tmp/`.
 - Treat the API as a public open-proxy.
-- Change the frontend from this repo. Video download is wired to `POST /jobs` + SSE; audio uses `POST /audio/jobs` + the same SSE/file routes. Load/title still uses oEmbed.
+- Change the frontend from this repo. Load/preview stays on YouTube oEmbed; video download uses `POST /jobs` + SSE; audio uses `POST /audio/jobs` + the same SSE/file routes.
 - Bind-mount host `./tmp` into Compose. That writes media into the git checkout and can fill the host disk.
 - Set `KEEP_TMP=true` in the Docker image or Compose.
 
@@ -51,4 +51,4 @@ Local URL tests (full + clip + audio): [LOCAL_API.md](./LOCAL_API.md).
 
 ## Frontend wiring status
 
-**Wired.** UI `triggerDownload` uses `POST /api/v1/jobs` for MP4 and `POST /api/v1/audio/jobs` for `mp3` / `m4a` / `flac`, then `GET /api/v1/jobs/:id/events` (yt-dlp progress) and the browser saves `GET /api/v1/jobs/:id/file` (`Accept-Ranges: bytes`). Copyable curl URLs: `GET /api/v1/download` (video) and `GET /api/v1/audio` (audio; same cache as `/download?format=mp3`). Load/title still uses oEmbed, not `POST /info`.
+**Wired.** UI Load/preview uses YouTube oEmbed (not `POST /api/v1/info`). Download uses `POST /api/v1/jobs` for MP4 and `POST /api/v1/audio/jobs` for `mp3` / `m4a` / `flac`, then `GET /api/v1/jobs/:id/events` (yt-dlp progress) and the browser saves `GET /api/v1/jobs/:id/file` (`Accept-Ranges: bytes`). Copyable curl URLs: `GET /api/v1/download` (video) and `GET /api/v1/audio` (audio; same cache as `/download?format=mp3`). `/info` remains available for curl/tools.

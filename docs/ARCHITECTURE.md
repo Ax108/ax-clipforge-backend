@@ -4,7 +4,7 @@ ClipForge backend is a standalone Express API: [https://github.com/Ax108/ax-clip
 
 The UI is a separate GitHub project: [https://github.com/Ax108/ax-clipforge-frontend](https://github.com/Ax108/ax-clipforge-frontend). They are not a monorepo.
 
-**Status:** `/info`, `/download`, `/audio`, and `/jobs` (SSE progress + cached files + HTTP Range) are implemented. The UI `triggerDownload` uses `/jobs` for MP4 and `/audio/jobs` for audio. Load/title still uses oEmbed, not `POST /info`.
+**Status:** `/info`, `/download`, `/audio`, and `/jobs` (SSE progress + cached files + HTTP Range) are implemented. The UI Load/preview uses YouTube oEmbed (not `POST /info`). Download uses `/jobs` for MP4 and `/audio/jobs` for audio.
 
 No MongoDB. Clips use yt-dlp `--download-sections` + `--force-keyframes-at-cuts` (FFmpeg CLI for merge/cut).
 
@@ -21,7 +21,7 @@ No MongoDB. Clips use yt-dlp `--download-sections` + `--force-keyframes-at-cuts`
 
 | Surface  | Now                                                         | Later (not this local release)  |
 | -------- | ----------------------------------------------------------- | ------------------------------- |
-| Frontend | Local Vite `:5173` (jobs SSE for Download; oEmbed for Load) | Maybe Vercel / Netlify / Render |
+| Frontend | Local Vite `:5173` (oEmbed Load; jobs SSE for Download)     | Maybe Vercel / Netlify / Render |
 | Backend  | Local `bun run dev` and/or **local Docker** + Redis sidecar | Maybe a hosted image            |
 
 Docker is **local-only today**. Cloud image hosting is a future option in [DEPLOYMENT.md](./DEPLOYMENT.md). A hosted frontend **cannot** call `localhost` on your PC.
