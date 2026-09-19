@@ -24,6 +24,7 @@ const envSchema = z.object({
   PROXY_URL: z.string().optional().default(''),
   COOKIE_FILE_PATH: z.string().optional().default(''),
   PO_TOKEN: z.string().optional().default(''),
+  YTDLP_PLAYER_CLIENTS: z.string().optional(),
   NODE_ENV: z.string().optional().default('development'),
   YTDLP_BIN: z.string().min(1).default('yt-dlp'),
   TMP_DIR: z.string().min(1).default(path.join(process.cwd(), 'tmp')),

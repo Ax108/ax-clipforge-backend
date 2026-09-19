@@ -69,8 +69,15 @@ export class YtDlpService {
     if (this.env.COOKIE_FILE_PATH) {
       args.push('--cookies', this.env.COOKIE_FILE_PATH);
     }
+    const youtubeArgs: string[] = [];
+    if (this.env.YTDLP_PLAYER_CLIENTS) {
+      youtubeArgs.push(`player_client=${this.env.YTDLP_PLAYER_CLIENTS}`);
+    }
     if (this.env.PO_TOKEN) {
-      args.push('--extractor-args', `youtube:po_token=${this.env.PO_TOKEN}`);
+      youtubeArgs.push(`po_token=${this.env.PO_TOKEN}`);
+    }
+    if (youtubeArgs.length > 0) {
+      args.push('--extractor-args', `youtube:${youtubeArgs.join(';')}`);
     }
     return args;
   }
@@ -146,7 +153,7 @@ export class YtDlpService {
     ];
 
     const result = await this.lock.run(() =>
-      spawnCommand(this.bin, args, {
+      this.spawnWithRetry(args, {
         timeoutMs: this.env.DOWNLOAD_TIMEOUT_MS,
         cwd: outDir,
         onStdoutLine: onLine,
@@ -181,9 +188,27 @@ export class YtDlpService {
     };
   }
 
+  private async spawnWithRetry(
+    args: string[],
+    opts: Parameters<typeof spawnCommand>[2],
+    attempts = 3,
+  ) {
+    let result = await spawnCommand(this.bin, args, opts);
+    for (
+      let i = 1;
+      i < attempts &&
+      result.code !== 0 &&
+      /page needs to be reloaded/i.test(result.stderr);
+      i += 1
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 1500 * i));
+      result = await spawnCommand(this.bin, args, opts);
+    }
+    return result;
+  }
+
   private async dumpJson(url: string): Promise<YtDlpDump> {
-    const result = await spawnCommand(
-      this.bin,
+    const result = await this.spawnWithRetry(
       [...this.extraArgs(), '--dump-single-json', '--skip-download', url],
       {timeoutMs: this.env.DOWNLOAD_TIMEOUT_MS},
     );

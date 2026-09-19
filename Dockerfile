@@ -13,7 +13,7 @@ RUN apt-get update \
     python3 \
   && rm -rf /var/lib/apt/lists/* \
   && curl -fsSL -o /usr/local/bin/yt-dlp \
-    https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+    https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp \
   && chmod a+rx /usr/local/bin/yt-dlp
 
 WORKDIR /app
