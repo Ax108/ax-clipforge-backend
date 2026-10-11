@@ -70,7 +70,9 @@ describe('rate limits', () => {
   it('does not rate-limit health or robots.txt', async () => {
     const base = await listen({RATE_LIMIT_EXTRACT_MAX: '1'});
     for (let i = 0; i < 3; i++) {
-      expect((await fetch(`${base}/api/v1/health`)).status).toBe(200);
+      const health = await fetch(`${base}/api/v1/health`);
+      expect([200, 503]).toContain(health.status);
+      expect(health.status).not.toBe(429);
       expect((await fetch(`${base}/robots.txt`)).status).toBe(200);
     }
   }, 15_000);

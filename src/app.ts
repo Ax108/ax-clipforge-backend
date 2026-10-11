@@ -13,6 +13,7 @@ import {
   jobRouter,
 } from './routes/download.routes.js';
 import {healthRouter} from './routes/health.routes.js';
+import {requireClipforgeToken} from './middleware/access.js';
 import {createRateLimiters} from './middleware/rateLimit.js';
 import {ROBOTS_TXT_BODY, blockSearchIndexing} from './middleware/robots.js';
 import {JobService} from './services/job.service.js';
@@ -37,6 +38,7 @@ export function createApp(
   const ytdlp = new YtDlpService(env);
   const jobs = new JobService(env, ytdlp, store);
   const limits = createRateLimiters(env);
+  const gate = requireClipforgeToken(env.CLIPFORGE_TOKEN);
 
   app.disable('x-powered-by');
   if (env.TRUST_PROXY) {
@@ -49,6 +51,7 @@ export function createApp(
     cors({
       origin: env.corsOrigins,
       credentials: false,
+      allowedHeaders: ['Content-Type', 'X-Clipforge-Token'],
       exposedHeaders: [
         'Content-Disposition',
         'Accept-Ranges',
@@ -74,10 +77,10 @@ export function createApp(
 
   // /health and /robots.txt: no rate limit (probes / crawlers reading robots).
   app.use('/api/v1/health', healthRouter(ytdlp, jobs));
-  app.use('/api/v1/info', infoRouter(ytdlp, limits.extract));
-  app.use('/api/v1/jobs', jobRouter(jobs, limits));
-  app.use('/api/v1/download', downloadRouter(jobs, limits.extract));
-  app.use('/api/v1/audio', audioRouter(jobs, limits.extract));
+  app.use('/api/v1/info', gate, infoRouter(ytdlp, limits.extract));
+  app.use('/api/v1/jobs', gate, jobRouter(jobs, limits));
+  app.use('/api/v1/download', gate, downloadRouter(jobs, limits.extract));
+  app.use('/api/v1/audio', gate, audioRouter(jobs, limits.extract));
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (isJsonParseError(err)) {

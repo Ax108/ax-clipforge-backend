@@ -5,6 +5,7 @@ Long-term operation of a YouTube extract API. This is **not** a bypass cookbook.
 ## Agent notes
 
 - Prefer **latest yt-dlp** always. Docker: GitHub `latest` at image build + `yt-dlp -U` in `docker/entrypoint.sh`. Local: `yt-dlp -U` on the host.
+- Prefer **current Deno** (≥ 2.3) for YouTube JS challenges. Docker downloads the linux-gnu zip at image build and leaves `deno` on PATH (yt-dlp enables it by default; this API does not pass `--js-runtimes`). Local `bun run dev`: `deno` must be on PATH for that shell. Rebuild the image to refresh the copy inside it.
 - Prefer a **current FFmpeg**. Docker uses the distro package in the image; rebuild the image to refresh it. Local: upgrade the host binary (winget/brew/apt), do not leave old copies on PATH.
 - Crawler block on `/download`, `/audio`, `POST /jobs`, `POST /audio/jobs`, and `GET /jobs/:id/file` is implemented (`src/lib/crawler.ts`).
 - `GET /robots.txt` is `Disallow: /`; every response also sets `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet` (search engines only — does not stop yt-dlp abuse).
@@ -25,7 +26,7 @@ YouTube player/signature changes break yt-dlp regularly.
 
 1. Reproduce with `yt-dlp --verbose <url>` on a machine that has the **latest** binary (or inside the local image).
 2. Update yt-dlp to **latest** and any wrapper flags in `src/services/ytdlp.service.ts`.
-3. Confirm FFmpeg is a **current** build (`ffmpeg -version`).
+3. Confirm FFmpeg is a **current** build (`ffmpeg -version`) and Deno is available (`deno --version`, ≥ 2.3).
 4. Commit in [https://github.com/Ax108/ax-clipforge-backend](https://github.com/Ax108/ax-clipforge-backend).
 5. `bun run docker:up` (rebuilds the local image) or publish a new image tag (future).
 6. Confirm `GET /api/v1/health` still reports `binaries.ytdlp` and `binaries.ffmpeg`.
@@ -74,7 +75,7 @@ If the UI at [https://github.com/Ax108/ax-clipforge-frontend](https://github.com
 
 ## Health
 
-`GET /api/v1/health` reports `binaries` (`ytdlp`, `ffmpeg`), `ytdlpVersion`, `extractorFlags`, and `tmp` (`dir`, `keepTmp`, `maxAgeMs`). On `bun run dev`, `"ytdlp": false` usually means the binary is installed but **not visible to that process** (stale shell PATH, or need `YTDLP_BIN=/absolute/path/to/yt-dlp`). Fix PATH or `YTDLP_BIN`, restart `bun run dev`, re-check health. The local Docker image ships yt-dlp + FFmpeg so host PATH is irrelevant there.
+`GET /api/v1/health` reports `binaries` (`ytdlp`, `ffmpeg`), `ytdlpVersion`, `extractorFlags`, and `tmp` (`dir`, `keepTmp`, `maxAgeMs`). The status is **200** and `ok: true` only when both binaries are present. Otherwise the status is **503** and `ok: false`. On `bun run dev`, `"ytdlp": false` usually means the binary is installed but **not visible to that process** (stale shell PATH, or need `YTDLP_BIN=/absolute/path/to/yt-dlp`). Fix PATH or `YTDLP_BIN`, restart `bun run dev`, re-check health. The local Docker image ships yt-dlp, FFmpeg, and Deno so host PATH is irrelevant there. Health does not report Deno; confirm it with `deno --version` on the host or `docker exec` into the API container. The API Compose service uses this URL as its healthcheck.
 
 ## Supply chain
 

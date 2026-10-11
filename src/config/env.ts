@@ -24,11 +24,25 @@ const envSchema = z.object({
   PROXY_URL: z.string().optional().default(''),
   COOKIE_FILE_PATH: z.string().optional().default(''),
   PO_TOKEN: z.string().optional().default(''),
+  /** When set, extract routes require this token. Empty keeps local access unchanged. */
+  CLIPFORGE_TOKEN: z.string().optional().default(''),
   NODE_ENV: z.string().optional().default('development'),
   YTDLP_BIN: z.string().min(1).default('yt-dlp'),
   TMP_DIR: z.string().min(1).default(path.join(process.cwd(), 'tmp')),
   DOWNLOAD_CONCURRENCY: z.coerce.number().int().positive().default(1),
   DOWNLOAD_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
+  /** Precision clip length cap (`end - start`). */
+  MAX_CLIP_SECONDS: z.coerce.number().int().positive().default(3_600),
+  /** Full-video cap, applied after yt-dlp reports a duration. */
+  MAX_SOURCE_SECONDS: z.coerce.number().int().positive().default(14_400),
+  /** Extracts running in this process, including ones still queued behind the lock. */
+  MAX_ACTIVE_JOBS: z.coerce.number().int().positive().default(4),
+  /** Refuse a new extract when the cache filesystem has less free space than this. */
+  MIN_FREE_DISK_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(1_073_741_824),
   TMP_MAX_AGE_MS: z.coerce.number().int().positive().default(900_000),
   KEEP_TMP: z.boolean().default(true),
   REDIS_URL: z.string().optional().default(''),
@@ -70,11 +84,16 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     PROXY_URL: source.PROXY_URL,
     COOKIE_FILE_PATH: source.COOKIE_FILE_PATH,
     PO_TOKEN: source.PO_TOKEN,
+    CLIPFORGE_TOKEN: source.CLIPFORGE_TOKEN,
     NODE_ENV: nodeEnv,
     YTDLP_BIN: source.YTDLP_BIN,
     TMP_DIR: source.TMP_DIR,
     DOWNLOAD_CONCURRENCY: source.DOWNLOAD_CONCURRENCY,
     DOWNLOAD_TIMEOUT_MS: source.DOWNLOAD_TIMEOUT_MS,
+    MAX_CLIP_SECONDS: source.MAX_CLIP_SECONDS,
+    MAX_SOURCE_SECONDS: source.MAX_SOURCE_SECONDS,
+    MAX_ACTIVE_JOBS: source.MAX_ACTIVE_JOBS,
+    MIN_FREE_DISK_BYTES: source.MIN_FREE_DISK_BYTES,
     TMP_MAX_AGE_MS: source.TMP_MAX_AGE_MS,
     KEEP_TMP: parseEnvBool(source.KEEP_TMP, true),
     REDIS_URL: source.REDIS_URL,

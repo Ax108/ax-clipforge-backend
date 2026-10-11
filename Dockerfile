@@ -1,4 +1,6 @@
-# Local-only image. Python + Node (yt-dlp n-sig) + FFmpeg CLI + yt-dlp + Bun API.
+# Local-only image. Bun runs the API. yt-dlp uses Deno (on PATH, enabled by
+# default) for YouTube JS challenges. The image also has Python 3, Debian
+# Node, FFmpeg, and yt-dlp.
 # Operators who run this image do not need Bun or yt-dlp on the host.
 # Test sources and Jest config are excluded via .dockerignore (not copied, not run).
 FROM oven/bun:1
@@ -11,10 +13,17 @@ RUN apt-get update \
     ffmpeg \
     nodejs \
     python3 \
+    unzip \
   && rm -rf /var/lib/apt/lists/* \
   && curl -fsSL -o /usr/local/bin/yt-dlp \
     https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
-  && chmod a+rx /usr/local/bin/yt-dlp
+  && chmod a+rx /usr/local/bin/yt-dlp \
+  && curl -fsSL -o /tmp/deno.zip \
+    https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip \
+  && unzip -o /tmp/deno.zip -d /usr/local/bin \
+  && chmod a+rx /usr/local/bin/deno \
+  && rm /tmp/deno.zip \
+  && deno --version
 
 WORKDIR /app
 

@@ -31,11 +31,11 @@ Read [docs/AGENTS.md](./docs/AGENTS.md) first, then:
 
 ## What the end user needs
 
-| How they run the API                 | Install on the machine                                                                                                                                                |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Recommended:** `bun run docker:up` | [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine (Linux). **Not** Bun, Node, yt-dlp, FFmpeg, or Python on the host. |
-| Local process: `bun run dev`         | [Bun](https://bun.sh) ≥ 1.0, Node.js ≥ 24, **yt-dlp (latest)**, **FFmpeg (latest stable)**.                                                                           |
-| Browser only                         | Nothing. The file is saved by the browser after `/download` or `/audio` streams `Content-Disposition: attachment`.                                                    |
+| How they run the API                 | Install on the machine                                                                                                                                                      |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Recommended:** `bun run docker:up` | [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine (Linux). **Not** Bun, Node, Deno, yt-dlp, FFmpeg, or Python on the host. |
+| Local process: `bun run dev`         | [Bun](https://bun.sh) ≥ 1.0, Node.js ≥ 24, **Deno ≥ 2.3**, **yt-dlp (latest)**, **FFmpeg (latest stable)**.                                                                 |
+| Browser only                         | Nothing. The file is saved by the browser after `/download` or `/audio` streams `Content-Disposition: attachment`.                                                          |
 
 Always use the **latest** yt-dlp release (`yt-dlp -U` or the GitHub `latest` binary). Use a **current** FFmpeg build (not a years-old distro pin if you can avoid it). YouTube extractors break often; stale binaries fail first.
 
@@ -53,13 +53,13 @@ Prefer `--frozen-lockfile` so install matches `bun.lock` (same as CI). Use plain
 
 **Local `bun run dev`:** the process must find **yt-dlp** and **FFmpeg**. If `GET /api/v1/health` shows `"ytdlp": false`, extracts return **503** even though the API is up. Put both binaries on PATH for that shell, or set `YTDLP_BIN` in `.env` to the full path of `yt-dlp` / `yt-dlp.exe` (common on Windows after WinGet when the terminal was opened before PATH updated). Details: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
-**Docker:** `bun run docker:up` — yt-dlp and FFmpeg are inside the image; no host PATH / `YTDLP_BIN` needed.
+**Docker:** `bun run docker:up` — yt-dlp, FFmpeg, and Deno are inside the image; the API process is Bun. No host PATH / `YTDLP_BIN` needed. Compose caps CPU, memory, and process count, and rotates container logs (10MB × 3 files per service). Recreate the containers for those limits to apply.
 
 Health: `http://localhost:5000/api/v1/health`
 
 Optional env: copy [`.env.example`](./.env.example). Defaults assume local Vite `http://localhost:5173`.
 
-Docker (no host yt-dlp/FFmpeg). Jest and `src/tests` are **not** copied into the image (see `.dockerignore`); the container only runs the API:
+Docker (no host yt-dlp/FFmpeg/Deno). Jest and `src/tests` are **not** copied into the image (see `.dockerignore`); the container only runs the API:
 
 ```bash
 bun run docker:up

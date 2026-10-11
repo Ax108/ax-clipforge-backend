@@ -57,10 +57,9 @@ describe('API', () => {
     return `http://127.0.0.1:${String(addr.port)}`;
   }
 
-  it('GET /api/v1/health reports process presence without requiring yt-dlp', async () => {
+  it('GET /api/v1/health is ready only when yt-dlp and ffmpeg exist', async () => {
     const base = await listen();
     const res = await fetch(`${base}/api/v1/health`);
-    expect(res.status).toBe(200);
     expect(res.headers.get('x-robots-tag')).toContain('noindex');
     const body = (await res.json()) as {
       ok: boolean;
@@ -70,7 +69,9 @@ describe('API', () => {
       tmp: {dir: string; keepTmp: boolean; maxAgeMs: number};
       jobs: {store: string};
     };
-    expect(body.ok).toBe(true);
+    const ready = body.binaries.ytdlp && body.binaries.ffmpeg;
+    expect(res.status).toBe(ready ? 200 : 503);
+    expect(body.ok).toBe(ready);
     expect(body.service).toBe('ax-clipforge-backend');
     expect(typeof body.binaries.ytdlp).toBe('boolean');
     expect(typeof body.binaries.ffmpeg).toBe('boolean');
@@ -109,8 +110,14 @@ describe('API', () => {
     const res = await fetch(
       `http://127.0.0.1:${String(addr.port)}/api/v1/health`,
     );
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as {tmp: {keepTmp: boolean}};
+    const body = (await res.json()) as {
+      ok: boolean;
+      binaries: {ytdlp: boolean; ffmpeg: boolean};
+      tmp: {keepTmp: boolean};
+    };
+    const ready = body.binaries.ytdlp && body.binaries.ffmpeg;
+    expect(res.status).toBe(ready ? 200 : 503);
+    expect(body.ok).toBe(ready);
     expect(body.tmp.keepTmp).toBe(false);
   });
 
@@ -222,5 +229,56 @@ describe('API', () => {
       body: JSON.stringify({url: 'https://notyoutube.com/watch?v=dQw4w9wgGcQ'}),
     });
     expect(lookalike.status).toBe(400);
+
+    const longClip = await fetch(`${base}/api/v1/jobs`, {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        url: 'https://www.youtube.com/watch?v=dQw4w9wgGcQ',
+        start: 0,
+        end: 7200,
+      }),
+    });
+    expect(longClip.status).toBe(400);
+    expect(await longClip.json()).toMatchObject({error: 'clip_too_long'});
+  });
+
+  it('requires CLIPFORGE_TOKEN on extract routes and leaves health open', async () => {
+    const env = loadEnv({
+      PORT: '0',
+      PUBLIC_API_URL: 'https://temp2.astrax108.com',
+      CORS_ORIGINS: 'https://temp1.astrax108.com',
+      CLIPFORGE_TOKEN: 'test-token',
+    });
+    const app = createApp(env);
+    server = app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+    const addr = server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${String(addr.port)}`;
+
+    const health = await fetch(`${base}/api/v1/health`);
+    expect([200, 503]).toContain(health.status);
+
+    const blocked = await fetch(`${base}/api/v1/jobs`, {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        url: 'https://www.youtube.com/watch?v=dQw4w9wgGcQ',
+      }),
+    });
+    expect(blocked.status).toBe(401);
+
+    const allowed = await fetch(`${base}/api/v1/jobs`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-clipforge-token': 'test-token',
+      },
+      body: JSON.stringify({url: 'not-a-url'}),
+    });
+    expect(allowed.status).toBe(400);
   });
 });

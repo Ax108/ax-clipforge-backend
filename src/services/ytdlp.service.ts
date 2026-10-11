@@ -16,11 +16,25 @@ export class YtDlpError extends Error {
     | 'unavailable'
     | 'invalid_url'
     | 'extract_failed'
-    | 'download_failed';
+    | 'download_failed'
+    | 'clip_too_long'
+    | 'source_too_long'
+    | 'source_too_large'
+    | 'busy'
+    | 'disk_full';
 
   constructor(
     message: string,
-    code: 'unavailable' | 'invalid_url' | 'extract_failed' | 'download_failed',
+    code:
+      | 'unavailable'
+      | 'invalid_url'
+      | 'extract_failed'
+      | 'download_failed'
+      | 'clip_too_long'
+      | 'source_too_long'
+      | 'source_too_large'
+      | 'busy'
+      | 'disk_full',
   ) {
     super(message);
     this.name = 'YtDlpError';
@@ -95,6 +109,30 @@ export class YtDlpService {
 
     const dump = await this.lock.run(() => this.dumpJson(watchUrlForId(id)));
     return this.toMetadata(id, dump);
+  }
+
+  /** Duration and approximate bytes for a full-video extract. One yt-dlp metadata call. */
+  async sourceBudget(
+    url: string,
+  ): Promise<{duration: number; bytes: number | null}> {
+    const id = parseYouTubeId(url);
+    if (!id) {
+      throw new YtDlpError('Invalid YouTube URL', 'invalid_url');
+    }
+    if (!(await this.isAvailable())) {
+      throw new YtDlpError('yt-dlp is not installed', 'unavailable');
+    }
+    const dump = await this.lock.run(() => this.dumpJson(watchUrlForId(id)));
+    const bytes =
+      typeof dump.filesize === 'number'
+        ? dump.filesize
+        : typeof dump.filesize_approx === 'number'
+          ? dump.filesize_approx
+          : null;
+    return {
+      duration: typeof dump.duration === 'number' ? dump.duration : 0,
+      bytes,
+    };
   }
 
   async downloadToFile(

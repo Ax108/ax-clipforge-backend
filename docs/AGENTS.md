@@ -21,7 +21,7 @@ Code is the source of truth (`src/config/env.ts`, `src/services/job.service.ts`,
 - Package manager is **Bun**. Clone/CI: `bun install --frozen-lockfile`. Change deps: `bun add`.
 - After code changes: `bun run lint`, `bun run tsc`, `bun run tsc:app`, `bun run test`. Then `bun run format:check`.
 - Docker: `TMP_DIR=/tmp/clipforge`, `KEEP_TMP=false` (TTL/LRU eviction only). **Never** bind-mount `./tmp`. Completed cache files are **reused**, not deleted after each stream. Jest / `src/tests` are excluded via `.dockerignore`.
-- Local `bun run dev`: `KEEP_TMP` defaults **true** (no cache eviction). Files live in `./tmp/cache`. yt-dlp + FFmpeg must be on PATH for that shell, or set `YTDLP_BIN` to a full path — otherwise health shows `ytdlp: false` and extracts **503**. Docker embeds both binaries (no host PATH).
+- Local `bun run dev`: `KEEP_TMP` defaults **true** (no cache eviction). Files live in `./tmp/cache`. yt-dlp, Deno, and FFmpeg must be on PATH for that shell, or set `YTDLP_BIN` to a full path — otherwise health shows `ytdlp: false` and extracts **503**. Docker embeds yt-dlp, FFmpeg, and Deno (no host PATH). The API process is Bun in both cases.
 - Redis: Compose runs Redis for job snapshots + pub/sub (loopback publish). `bun run dev` without `REDIS_URL` uses in-memory jobs (SSE still works). `bun run dev` binds `127.0.0.1` unless `LISTEN_HOST` is set.
 - CORS is an allowlist. Never `*`.
 - Rate limits: defaults in `.env.example` (`RATE_LIMIT_*`). Exempt: `/api/v1/health`, `/robots.txt`. Set `TRUST_PROXY=true` only behind a reverse proxy.

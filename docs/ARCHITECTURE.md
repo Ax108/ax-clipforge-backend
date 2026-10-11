@@ -29,20 +29,20 @@ Docker is **local-only today**. Cloud image hosting is a future option in [DEPLO
 
 ## Stack
 
-| Layer             | Choice                                                                                                                                        |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| HTTP              | Express 5 + TypeScript 7                                                                                                                      |
-| Runtime / install | Bun for install and `bun run dev`. Express is the HTTP framework. The Docker image also includes Node.js for yt-dlp n-sig.                    |
-| Validation        | Zod (`src/config/env.ts`, `src/config/request.ts`)                                                                                            |
-| Extract           | yt-dlp (`child_process` spawn), in-process semaphore (`DOWNLOAD_CONCURRENCY`)                                                                 |
-| Clip cut          | `--download-sections "*START-END"` + `--force-keyframes-at-cuts`                                                                              |
-| Mux               | FFmpeg CLI, invoked by yt-dlp (`--merge-output-format`, audio `-x`)                                                                           |
-| Tmp               | `tmp/cache/{id}_{format}_{quality}_{full\|start-end}.{format}`. Only that exact file is a cache hit. Docker TTL/LRU. Redis optional for jobs. |
-| Job store         | Redis when `REDIS_URL` is set (Compose); otherwise in-memory                                                                                  |
+| Layer             | Choice                                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| HTTP              | Express 5 + TypeScript 7                                                                                                                                                 |
+| Runtime / install | Bun for install, `bun run dev`, and the API process inside Docker. Express is the HTTP framework. The image puts Deno on PATH so yt-dlp can solve YouTube JS challenges. |
+| Validation        | Zod (`src/config/env.ts`, `src/config/request.ts`)                                                                                                                       |
+| Extract           | yt-dlp (`child_process` spawn), in-process semaphore (`DOWNLOAD_CONCURRENCY`)                                                                                            |
+| Clip cut          | `--download-sections "*START-END"` + `--force-keyframes-at-cuts`                                                                                                         |
+| Mux               | FFmpeg CLI, invoked by yt-dlp (`--merge-output-format`, audio `-x`)                                                                                                      |
+| Tmp               | `tmp/cache/{id}_{format}_{quality}_{full\|start-end}.{format}`. Only that exact file is a cache hit. Docker TTL/LRU. Redis optional for jobs.                            |
+| Job store         | Redis when `REDIS_URL` is set (Compose); otherwise in-memory                                                                                                             |
 
 The Docker image ships the **FFmpeg CLI**. yt-dlp calls that binary to merge DASH video+audio, cut clips, and convert audio.
 
-Docker also installs **Node.js** so yt-dlp can solve YouTube n-sig / EJS challenges, and **Python 3**.
+The same image installs **Deno** (current linux-gnu zip at build) for YouTube JS challenges. yt-dlp enables Deno by default when `deno` is on PATH ([EJS guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS), Deno ≥ 2.3). It also installs **Python 3** and Debian **Node.js**. The API process is still `bun src/server.ts`.
 
 ## Frontend wiring
 

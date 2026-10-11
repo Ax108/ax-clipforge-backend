@@ -27,12 +27,13 @@ Confirm: `GET /api/v1/health` → `tmp.keepTmp`, `jobs.store`.
 ## Prerequisites
 
 1. API listening on `http://localhost:5000`.
-2. For **`bun run dev`:** latest **yt-dlp** + **FFmpeg** must be resolvable by that process — on `PATH`, or set `YTDLP_BIN` to an absolute path (Windows WinGet installs often need a new shell or an explicit path). For **Docker** (`bun run docker:up`): binaries are in the image; host PATH does not matter.
+2. For **`bun run dev`:** latest **yt-dlp**, **Deno ≥ 2.3**, and **FFmpeg** must be resolvable by that process. yt-dlp and FFmpeg are on `PATH`, or set `YTDLP_BIN` to an absolute path (Windows WinGet installs often need a new shell or an explicit path). Deno must be on `PATH`; yt-dlp enables it by default. For **Docker** (`bun run docker:up`): those binaries are in the image; host PATH does not matter.
 3. `GET http://localhost:5000/api/v1/health` shows `binaries.ytdlp` and `binaries.ffmpeg` **true**. If `ytdlp` is false, extract routes return **503** until PATH/`YTDLP_BIN` is fixed.
 
 ```bash
 # bun run dev — confirm the same shell can see the tools:
 yt-dlp --version
+deno --version
 ffmpeg -version
 bun run dev
 # other terminal:

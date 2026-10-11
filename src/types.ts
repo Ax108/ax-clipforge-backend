@@ -24,6 +24,8 @@ export interface YtDlpDump {
   id?: string;
   title?: string;
   duration?: number;
+  filesize?: number;
+  filesize_approx?: number;
   thumbnail?: string;
   uploader?: string;
   channel?: string;

@@ -1,0 +1,65 @@
+# Coolify stack for the API and a private Redis.
+# Local development keeps using docker-compose.yml (`bun run docker:up`).
+#
+# In Coolify: New Resource → Docker Compose, this file, domain
+# https://temp2.astrax108.com on the api service port 5000.
+# Do not assign a public domain or host port to redis.
+# Set CLIPFORGE_TOKEN in the Coolify UI (same value as the frontend
+# build arg VITE_CLIPFORGE_TOKEN). Do not commit that value.
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    mem_limit: 256m
+    cpus: '0.5'
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  api:
+    build: .
+    expose:
+      - '5000'
+    environment:
+      NODE_ENV: production
+      PORT: '5000'
+      LISTEN_HOST: 0.0.0.0
+      PUBLIC_API_URL: https://temp2.astrax108.com
+      CORS_ORIGINS: https://temp1.astrax108.com
+      TRUST_PROXY: 'true'
+      REDIS_URL: redis://redis:6379
+      KEEP_TMP: 'false'
+      YTDLP_UPDATE_ON_BOOT: 'false'
+      TMP_DIR: /tmp/clipforge
+      MAX_CLIP_SECONDS: '3600'
+      MAX_SOURCE_SECONDS: '14400'
+      MAX_ACTIVE_JOBS: '4'
+      MIN_FREE_DISK_BYTES: '1073741824'
+      CLIPFORGE_TOKEN: ${CLIPFORGE_TOKEN:?set CLIPFORGE_TOKEN in Coolify}
+    mem_limit: 2g
+    cpus: '2'
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:5000/api/v1/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped

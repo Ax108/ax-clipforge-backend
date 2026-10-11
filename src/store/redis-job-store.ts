@@ -173,7 +173,10 @@ export async function createJobStore(
 ): Promise<JobStore> {
   if (!redisUrl) return new MemoryJobStore();
   try {
-    const client = createClient({url: redisUrl}) as unknown as RedisConn;
+    const client = createClient({
+      url: redisUrl,
+      socket: {connectTimeout: 5_000},
+    }) as unknown as RedisConn;
     const sub = client.duplicate();
     client.on('error', err => {
       console.error('Redis error', err);
@@ -183,10 +186,7 @@ export async function createJobStore(
     console.log(`Job store: redis (${redisUrl})`);
     return new RedisJobStore(client, sub, ttlMs, inflightTtlMs);
   } catch (err) {
-    console.warn(
-      `Redis unavailable (${redisUrl}), using in-memory job store`,
-      err,
-    );
-    return new MemoryJobStore();
+    console.error(`Redis required but unavailable (${redisUrl})`, err);
+    throw err;
   }
 }

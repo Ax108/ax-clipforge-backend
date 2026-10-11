@@ -41,6 +41,17 @@ if (env.KEEP_TMP) {
   sweepTimer.unref();
 }
 
+if (
+  env.NODE_ENV === 'production' &&
+  !env.PUBLIC_API_URL.includes('localhost') &&
+  !env.CLIPFORGE_TOKEN
+) {
+  console.error(
+    'CLIPFORGE_TOKEN is required when PUBLIC_API_URL is a public origin',
+  );
+  process.exit(1);
+}
+
 const store = await createJobStore(
   env.REDIS_URL,
   env.JOB_TTL_MS,
@@ -49,12 +60,17 @@ const store = await createJobStore(
 const app = createApp(env, store);
 
 const server = app.listen(env.PORT, env.LISTEN_HOST, () => {
+  // Node's default requestTimeout (5 minutes) would cut SSE and long extracts.
+  // DOWNLOAD_TIMEOUT_MS is the extract limit.
+  server.requestTimeout = 0;
+  server.headersTimeout = 70_000;
+  server.keepAliveTimeout = 65_000;
   console.log(
     `ClipForge API listening on ${env.LISTEN_HOST}:${String(env.PORT)} (${env.PUBLIC_API_URL})`,
   );
   console.log(`CORS allowlist: ${env.corsOrigins.join(', ')}`);
   console.log(
-    `TMP_DIR=${env.TMP_DIR} KEEP_TMP=${String(env.KEEP_TMP)} jobs=${store.kind}`,
+    `TMP_DIR=${env.TMP_DIR} KEEP_TMP=${String(env.KEEP_TMP)} jobs=${store.kind} token=${env.CLIPFORGE_TOKEN ? 'on' : 'off'}`,
   );
 });
 

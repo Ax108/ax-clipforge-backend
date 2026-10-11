@@ -26,9 +26,10 @@ export async function health(
 
   const extractorFlags = ytdlp.extraArgs().filter(arg => arg.startsWith('--'));
   const tmp = ytdlp.tmpConfig();
+  const ready = ytdlpOk && ffmpegOk;
 
-  res.status(200).json({
-    ok: true,
+  res.status(ready ? 200 : 503).json({
+    ok: ready,
     service: 'ax-clipforge-backend',
     binaries: {
       ytdlp: ytdlpOk,
@@ -266,7 +267,16 @@ async function requireJob(
 function sendYtDlpError(res: Response, err: unknown): void {
   if (err instanceof YtDlpError) {
     const status =
-      err.code === 'invalid_url' ? 400 : err.code === 'unavailable' ? 503 : 502;
+      err.code === 'invalid_url' ||
+      err.code === 'clip_too_long' ||
+      err.code === 'source_too_long' ||
+      err.code === 'source_too_large'
+        ? 400
+        : err.code === 'unavailable' ||
+            err.code === 'disk_full' ||
+            err.code === 'busy'
+          ? 503
+          : 502;
     res.status(status).json({error: err.code, message: err.message});
     return;
   }

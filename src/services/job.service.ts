@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {mkdir, statfs} from 'node:fs/promises';
 import path from 'node:path';
 import type {AppEnv} from '../config/env.js';
 import {cacheKeyFor} from '../lib/cache-key.js';
@@ -11,6 +12,7 @@ export class JobService {
   private readonly env: AppEnv;
   private readonly ytdlp: YtDlpService;
   readonly store: JobStore;
+  private activeJobs = 0;
 
   constructor(env: AppEnv, ytdlp: YtDlpService, store: JobStore) {
     this.env = env;
@@ -19,7 +21,11 @@ export class JobService {
   }
 
   fileUrl(jobId: string): string {
-    return `${this.env.PUBLIC_API_URL.replace(/\/$/, '')}/api/v1/jobs/${jobId}/file`;
+    const base = `${this.env.PUBLIC_API_URL.replace(/\/$/, '')}/api/v1/jobs/${jobId}/file`;
+    if (!this.env.CLIPFORGE_TOKEN) return base;
+    const url = new URL(base);
+    url.searchParams.set('access_token', this.env.CLIPFORGE_TOKEN);
+    return url.toString();
   }
 
   toPublic(job: JobRecord) {
@@ -41,6 +47,7 @@ export class JobService {
     if (!cacheKey) {
       throw new YtDlpError('Invalid YouTube URL', 'invalid_url');
     }
+    this.assertClipLength(req);
 
     const cached = await this.completeFromCache(req, cacheKey);
     if (cached) return cached;
@@ -82,7 +89,26 @@ export class JobService {
       throw new YtDlpError('yt-dlp is not installed', 'unavailable');
     }
 
-    await this.store.publish(job);
+    try {
+      await this.assertFreeDisk();
+      await this.assertSourceBudget(req);
+    } catch (err) {
+      await this.abortQueued(job);
+      throw err;
+    }
+
+    if (this.activeJobs >= this.env.MAX_ACTIVE_JOBS) {
+      await this.abortQueued(job);
+      throw new YtDlpError('Too many downloads are already running', 'busy');
+    }
+    this.activeJobs += 1;
+    try {
+      await this.store.publish(job);
+    } catch (err) {
+      this.activeJobs -= 1;
+      await this.abortQueued(job);
+      throw err;
+    }
     void this.run(job);
     return job;
   }
@@ -204,7 +230,50 @@ export class JobService {
         error: err instanceof YtDlpError ? err.code : 'download_failed',
       });
     } finally {
+      this.activeJobs = Math.max(0, this.activeJobs - 1);
       await this.store.releaseInFlight(job.cacheKey, job.id);
     }
   }
+
+  private assertClipLength(req: DownloadRequest): void {
+    if (!isClip(req)) return;
+    const span = (req.end ?? 0) - (req.start ?? 0);
+    if (span <= this.env.MAX_CLIP_SECONDS) return;
+    throw new YtDlpError(
+      `Clip is longer than ${String(this.env.MAX_CLIP_SECONDS)} seconds`,
+      'clip_too_long',
+    );
+  }
+
+  private async assertFreeDisk(): Promise<void> {
+    const dir = cacheDir(this.env.TMP_DIR);
+    await mkdir(dir, {recursive: true});
+    const stats = await statfs(dir);
+    const free = Number(stats.bavail) * Number(stats.bsize);
+    if (free >= this.env.MIN_FREE_DISK_BYTES) return;
+    throw new YtDlpError('Not enough free disk for a new extract', 'disk_full');
+  }
+
+  private async assertSourceBudget(req: DownloadRequest): Promise<void> {
+    if (isClip(req)) return;
+    const budget = await this.ytdlp.sourceBudget(req.url);
+    if (budget.duration > this.env.MAX_SOURCE_SECONDS) {
+      throw new YtDlpError(
+        `Video is longer than ${String(this.env.MAX_SOURCE_SECONDS)} seconds`,
+        'source_too_long',
+      );
+    }
+    if (budget.bytes != null && budget.bytes > this.env.CACHE_MAX_BYTES) {
+      throw new YtDlpError(
+        'Video is larger than the cache budget',
+        'source_too_large',
+      );
+    }
+  }
+}
+
+function isClip(req: DownloadRequest): boolean {
+  return (
+    req.start != null && req.end != null && !(req.start === 0 && req.end === 0)
+  );
 }
